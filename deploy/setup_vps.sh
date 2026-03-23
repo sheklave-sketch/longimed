@@ -8,7 +8,7 @@ set -e
 
 DOMAIN="longimed.yourdomain.com"   # ← change this
 APP_DIR="/root/longimed"
-REPO_URL="https://github.com/YOUR_USERNAME/longimed.git"  # ← change this
+REPO_URL="https://github.com/sheklave-sketch/longimed.git"
 
 echo "==> Updating system packages..."
 apt-get update -qq && apt-get upgrade -y -qq
