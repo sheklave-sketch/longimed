@@ -1,0 +1,32 @@
+# Secrets
+.env
+
+# Local dev overrides — not for VPS
+docker-compose.override.yml
+
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+.venv/
+venv/
+
+# Alembic compiled
+alembic/versions/__pycache__/
+
+# Testing
+.pytest_cache/
+htmlcov/
+.coverage
+
+# Temporary
+.tmp/
+
+# Mini App
+miniapp/node_modules/
+miniapp/.next/
+miniapp/.env.local
+
+# OS
+.DS_Store
+Thumbs.db
