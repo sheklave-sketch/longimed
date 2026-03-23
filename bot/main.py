@@ -65,7 +65,12 @@ def register_handlers(app: Application) -> None:
     for handler in moderator_handlers:
         app.add_handler(handler, group=6)
 
-    # ── Priority 7: Admin commands ────────────────────────────────────────
+    # ── Priority 7a: Q&A approve/reject callbacks (global — fired from admin/mod messages) ──
+    from bot.handlers.public_question import question_approve_handler, question_reject_handler
+    app.add_handler(question_approve_handler, group=7)
+    app.add_handler(question_reject_handler, group=7)
+
+    # ── Priority 7b: Admin commands ───────────────────────────────────────
     from bot.handlers.admin import admin_handlers
     for handler in admin_handlers:
         app.add_handler(handler, group=7)
