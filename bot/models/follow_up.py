@@ -24,7 +24,7 @@ class FollowUp(Base):
     text: Mapped[str] = mapped_column(Text, nullable=False)
     is_anonymous: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
     status: Mapped[FollowUpStatus] = mapped_column(
-        Enum(FollowUpStatus), default=FollowUpStatus.PENDING, nullable=False
+        Enum(FollowUpStatus, values_callable=lambda e: [x.value for x in e]), default=FollowUpStatus.PENDING, nullable=False
     )
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), server_default=func.now(), nullable=False

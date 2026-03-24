@@ -28,12 +28,12 @@ class Report(Base):
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True)
     reporter_id: Mapped[int] = mapped_column(ForeignKey("users.id"), nullable=False, index=True)
-    target_type: Mapped[TargetType] = mapped_column(Enum(TargetType), nullable=False)
+    target_type: Mapped[TargetType] = mapped_column(Enum(TargetType, values_callable=lambda e: [x.value for x in e]), nullable=False)
     target_id: Mapped[int] = mapped_column(Integer, nullable=False)
     reason: Mapped[str] = mapped_column(String(100), nullable=False)
     evidence_file_id: Mapped[str | None] = mapped_column(String(200), nullable=True)
     status: Mapped[ReportStatus] = mapped_column(
-        Enum(ReportStatus), default=ReportStatus.OPEN, nullable=False, index=True
+        Enum(ReportStatus, values_callable=lambda e: [x.value for x in e]), default=ReportStatus.OPEN, nullable=False, index=True
     )
     reviewed_by: Mapped[int | None] = mapped_column(Integer, nullable=True)
     resolution: Mapped[str | None] = mapped_column(Text, nullable=True)

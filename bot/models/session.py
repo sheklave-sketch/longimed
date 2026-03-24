@@ -38,11 +38,11 @@ class Session(Base):
     id: Mapped[int] = mapped_column(Integer, primary_key=True)
     user_id: Mapped[int] = mapped_column(ForeignKey("users.id"), nullable=False, index=True)
     doctor_id: Mapped[int | None] = mapped_column(ForeignKey("doctors.id"), nullable=True, index=True)
-    package: Mapped[SessionPackage] = mapped_column(Enum(SessionPackage), nullable=False)
+    package: Mapped[SessionPackage] = mapped_column(Enum(SessionPackage, values_callable=lambda e: [x.value for x in e]), nullable=False)
     status: Mapped[SessionStatus] = mapped_column(
-        Enum(SessionStatus), default=SessionStatus.PENDING_APPROVAL, nullable=False, index=True
+        Enum(SessionStatus, values_callable=lambda e: [x.value for x in e]), default=SessionStatus.PENDING_APPROVAL, nullable=False, index=True
     )
-    session_mode: Mapped[SessionMode] = mapped_column(Enum(SessionMode), nullable=False)
+    session_mode: Mapped[SessionMode] = mapped_column(Enum(SessionMode, values_callable=lambda e: [x.value for x in e]), nullable=False)
     issue_description: Mapped[str] = mapped_column(Text, nullable=False)
     is_anonymous: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
 

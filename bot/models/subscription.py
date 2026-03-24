@@ -29,11 +29,11 @@ class Subscription(Base):
     diaspora_telegram_id: Mapped[int] = mapped_column(BigInteger, nullable=False)
     diaspora_email: Mapped[str] = mapped_column(String(255), nullable=False)
     beneficiary_user_id: Mapped[int] = mapped_column(ForeignKey("users.id"), nullable=False)
-    plan: Mapped[SubscriptionPlan] = mapped_column(Enum(SubscriptionPlan), nullable=False)
+    plan: Mapped[SubscriptionPlan] = mapped_column(Enum(SubscriptionPlan, values_callable=lambda e: [x.value for x in e]), nullable=False)
     sessions_per_month: Mapped[int] = mapped_column(Integer, nullable=False)
     stripe_subscription_id: Mapped[str | None] = mapped_column(String(200), nullable=True)
     status: Mapped[SubscriptionStatus] = mapped_column(
-        Enum(SubscriptionStatus), default=SubscriptionStatus.ACTIVE, nullable=False
+        Enum(SubscriptionStatus, values_callable=lambda e: [x.value for x in e]), default=SubscriptionStatus.ACTIVE, nullable=False
     )
     next_billing_date: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
     created_at: Mapped[datetime] = mapped_column(

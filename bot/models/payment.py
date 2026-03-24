@@ -30,11 +30,11 @@ class Payment(Base):
     user_id: Mapped[int] = mapped_column(ForeignKey("users.id"), nullable=False, index=True)
     amount_etb: Mapped[Decimal | None] = mapped_column(Numeric(10, 2), nullable=True)
     provider: Mapped[PaymentProvider] = mapped_column(
-        Enum(PaymentProvider), default=PaymentProvider.MANUAL, nullable=False
+        Enum(PaymentProvider, values_callable=lambda e: [x.value for x in e]), default=PaymentProvider.MANUAL, nullable=False
     )
     provider_tx_id: Mapped[str | None] = mapped_column(String(200), nullable=True)
     status: Mapped[PaymentStatus] = mapped_column(
-        Enum(PaymentStatus), default=PaymentStatus.PENDING, nullable=False, index=True
+        Enum(PaymentStatus, values_callable=lambda e: [x.value for x in e]), default=PaymentStatus.PENDING, nullable=False, index=True
     )
     confirmed_by_admin_id: Mapped[int | None] = mapped_column(Integer, nullable=True)
     created_at: Mapped[datetime] = mapped_column(

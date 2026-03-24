@@ -26,7 +26,7 @@ class Waitlist(Base):
     specialty: Mapped[str] = mapped_column(String(50), nullable=False)
     position: Mapped[int] = mapped_column(Integer, nullable=False)
     status: Mapped[WaitlistStatus] = mapped_column(
-        Enum(WaitlistStatus), default=WaitlistStatus.WAITING, nullable=False
+        Enum(WaitlistStatus, values_callable=lambda e: [x.value for x in e]), default=WaitlistStatus.WAITING, nullable=False
     )
     notified_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
     expires_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)

@@ -19,7 +19,7 @@ class RelayMessage(Base):
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True)
     session_id: Mapped[int] = mapped_column(ForeignKey("sessions.id"), nullable=False, index=True)
-    sender_role: Mapped[SenderRole] = mapped_column(Enum(SenderRole), nullable=False)
+    sender_role: Mapped[SenderRole] = mapped_column(Enum(SenderRole, values_callable=lambda e: [x.value for x in e]), nullable=False)
     telegram_message_id: Mapped[int] = mapped_column(BigInteger, nullable=False)
     content: Mapped[str | None] = mapped_column(Text, nullable=True)
     media_type: Mapped[str | None] = mapped_column(String(50), nullable=True)  # photo, voice, document

@@ -25,7 +25,7 @@ class DoctorEarnings(Base):
     fee_percent: Mapped[float] = mapped_column(Float, nullable=False)
     net_etb: Mapped[Decimal] = mapped_column(Numeric(10, 2), nullable=False)
     status: Mapped[EarningsStatus] = mapped_column(
-        Enum(EarningsStatus), default=EarningsStatus.PENDING, nullable=False
+        Enum(EarningsStatus, values_callable=lambda e: [x.value for x in e]), default=EarningsStatus.PENDING, nullable=False
     )
     paid_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
     paid_by_admin_id: Mapped[int | None] = mapped_column(Integer, nullable=True)

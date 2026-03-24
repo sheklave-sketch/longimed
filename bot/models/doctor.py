@@ -35,13 +35,13 @@ class Doctor(Base):
     telegram_id: Mapped[int] = mapped_column(BigInteger, unique=True, nullable=False, index=True)
     full_name: Mapped[str] = mapped_column(String(200), nullable=False)
     license_number: Mapped[str] = mapped_column(String(100), unique=True, nullable=False)
-    specialty: Mapped[Specialty] = mapped_column(Enum(Specialty), nullable=False)
+    specialty: Mapped[Specialty] = mapped_column(Enum(Specialty, values_callable=lambda e: [x.value for x in e]), nullable=False)
     languages: Mapped[list[str]] = mapped_column(ARRAY(String), default=list, nullable=False)
     bio: Mapped[str | None] = mapped_column(Text, nullable=True)
     is_verified: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
     is_available: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
     registration_status: Mapped[RegistrationStatus] = mapped_column(
-        Enum(RegistrationStatus), default=RegistrationStatus.PENDING, nullable=False
+        Enum(RegistrationStatus, values_callable=lambda e: [x.value for x in e]), default=RegistrationStatus.PENDING, nullable=False
     )
     rejection_reason: Mapped[str | None] = mapped_column(Text, nullable=True)
     license_document_file_id: Mapped[str | None] = mapped_column(String(200), nullable=True)

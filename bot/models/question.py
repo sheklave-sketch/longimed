@@ -24,11 +24,14 @@ class Question(Base):
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True)
     user_id: Mapped[int] = mapped_column(ForeignKey("users.id"), nullable=False, index=True)
-    category: Mapped[Specialty] = mapped_column(Enum(Specialty), nullable=False)
+    category: Mapped[Specialty] = mapped_column(
+        Enum(Specialty, values_callable=lambda e: [x.value for x in e]), nullable=False
+    )
     text: Mapped[str] = mapped_column(Text, nullable=False)
     is_anonymous: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
     status: Mapped[QuestionStatus] = mapped_column(
-        Enum(QuestionStatus), default=QuestionStatus.PENDING, nullable=False, index=True
+        Enum(QuestionStatus, values_callable=lambda e: [x.value for x in e]),
+        default=QuestionStatus.PENDING, nullable=False, index=True
     )
     rejection_reason: Mapped[str | None] = mapped_column(Text, nullable=True)
     channel_message_id: Mapped[int | None] = mapped_column(BigInteger, nullable=True)
