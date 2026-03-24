@@ -29,11 +29,60 @@ LANGUAGE, CONSENT, ROLE, PATIENT_PHONE, DONE = range(5)
 
 
 async def cmd_start(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
-    """Entry point — show language selector."""
+    """Entry point — check if returning user, otherwise show language selector."""
     # Skip if this is a deep-link /start (has args)
     if context.args:
         return ConversationHandler.END
 
+    # Check if user already exists and is fully onboarded
+    from bot.database import session_factory
+    from bot.models.user import User
+    from bot.models.doctor import Doctor
+    from sqlalchemy import select
+
+    async with session_factory() as session:
+        result = await session.execute(
+            select(User).where(User.telegram_id == update.effective_user.id)
+        )
+        user = result.scalar_one_or_none()
+
+        # Check if they're a verified doctor
+        doc_result = await session.execute(
+            select(Doctor).where(
+                Doctor.telegram_id == update.effective_user.id,
+                Doctor.is_verified.is_(True),
+            )
+        )
+        doctor = doc_result.scalar_one_or_none()
+
+    # Returning user with phone → straight to menu
+    if user and user.consent_given and user.phone:
+        lang = user.language
+        context.user_data["lang"] = lang
+
+        if doctor:
+            await update.message.reply_text(
+                f"Welcome back, Dr. {doctor.full_name}! 👨‍⚕️",
+                reply_markup=doctor_menu_keyboard(lang),
+            )
+        else:
+            await update.message.reply_text(
+                t("patient_ready", lang),
+                reply_markup=main_menu_keyboard(lang),
+            )
+        return ConversationHandler.END
+
+    # Returning user with consent but no phone → skip to role/phone
+    if user and user.consent_given and not user.phone:
+        lang = user.language
+        context.user_data["lang"] = lang
+        await update.message.reply_text(
+            t("role_question", lang),
+            reply_markup=role_keyboard(lang),
+        )
+        return ROLE
+
+    # New user → full onboarding
     await update.message.reply_text(
         "Welcome to LongiMed 🏥\nConnecting you with verified Ethiopian doctors.\n\n"
         "ወደ LongiMed እንኳን ደህና መጡ 🏥",
