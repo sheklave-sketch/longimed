@@ -94,6 +94,18 @@ def register_handlers(app: Application) -> None:
     logger.info("All handlers registered.")
 
 
+async def error_handler(update: object, context: ContextTypes.DEFAULT_TYPE) -> None:
+    """Log all unhandled errors so we can see them in docker logs."""
+    logger.error("Unhandled exception: %s", context.error, exc_info=context.error)
+    if hasattr(update, "effective_message") and update.effective_message:
+        try:
+            await update.effective_message.reply_text(
+                "Something went wrong. Please try again or send /start."
+            )
+        except Exception:
+            pass
+
+
 def main() -> None:
     app = (
         ApplicationBuilder()
@@ -103,6 +115,7 @@ def main() -> None:
     )
 
     register_handlers(app)
+    app.add_error_handler(error_handler)
 
     logger.info("Starting polling...")
     app.run_polling(

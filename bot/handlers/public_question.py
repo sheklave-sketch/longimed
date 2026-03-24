@@ -121,14 +121,13 @@ async def receive_question_text(update: Update, context: ContextTypes.DEFAULT_TY
     anon_label = "🕵️ Anonymous" if anonymous else "👤 Public"
 
     preview = (
-        f"Step 4 of 4 — *Preview*\n\n"
+        f"Step 4 of 4 — Preview\n\n"
         f"📂 Category: {category.title()}\n"
         f"👁 Visibility: {anon_label}\n\n"
         f"❓ {text}"
     )
     await update.message.reply_text(
         text=preview,
-        parse_mode="Markdown",
         reply_markup=confirm_cancel_keyboard(lang),
     )
     return CONFIRM_QUESTION
