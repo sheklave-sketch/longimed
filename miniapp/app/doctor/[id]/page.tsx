@@ -6,9 +6,9 @@ import { motion } from "framer-motion";
 import { openBotLink, initTelegram } from "@/lib/telegram";
 import type { Doctor } from "@/lib/api";
 
-const SPECIALTY_ICONS: Record<string, string> = {
-  general: "🩺", pediatrics: "👶", obgyn: "🤰",
-  dermatology: "🧴", mental_health: "🧠", cardiology: "❤️", other: "🏥",
+const SPEC_ICONS: Record<string, string> = {
+  general: "🩺", pediatrics: "👶", obgyn: "🤰", dermatology: "🧴",
+  mental_health: "🧠", cardiology: "❤️", other: "🏥",
 };
 
 export default function DoctorProfile() {
@@ -20,171 +20,130 @@ export default function DoctorProfile() {
   useEffect(() => {
     initTelegram();
     fetch(`/api/doctors/${params.id}`)
-      .then((r) => {
-        if (!r.ok) throw new Error("Not found");
-        return r.json();
-      })
+      .then((r) => { if (!r.ok) throw new Error(); return r.json(); })
       .then(setDoctor)
       .catch(() => setDoctor(null))
       .finally(() => setLoading(false));
   }, [params.id]);
 
-  if (loading) {
-    return (
-      <div className="pt-8 flex flex-col items-center">
-        <div className="w-24 h-24 rounded-2xl bg-navy-100 animate-pulse mb-4" />
-        <div className="h-6 bg-navy-100 rounded w-48 animate-pulse mb-2" />
-        <div className="h-4 bg-navy-50 rounded w-32 animate-pulse" />
-      </div>
-    );
-  }
+  if (loading) return (
+    <div className="pt-10 flex flex-col items-center gap-3">
+      <div className="w-20 h-20 rounded-3xl skeleton" />
+      <div className="h-5 skeleton w-40" />
+      <div className="h-4 skeleton w-28" />
+    </div>
+  );
 
-  if (!doctor) {
-    return (
-      <div className="pt-16 text-center">
-        <p className="text-5xl mb-4">😔</p>
-        <h2 className="font-display font-bold text-navy-500 text-xl">Doctor not found</h2>
-        <button
-          onClick={() => router.push("/")}
-          className="mt-4 px-6 py-2 bg-teal-400 text-white rounded-full text-sm font-medium"
-        >
-          ← Back to Directory
-        </button>
-      </div>
-    );
-  }
+  if (!doctor) return (
+    <div className="pt-20 text-center">
+      <div className="w-16 h-16 rounded-2xl bg-surface-muted flex items-center justify-center text-3xl mx-auto mb-4">😔</div>
+      <h2 className="font-display font-bold text-ink-rich text-lg">Doctor not found</h2>
+      <button onClick={() => router.push("/")} className="mt-5 px-6 py-2.5 bg-brand-teal text-white rounded-2xl text-sm font-semibold shadow-glow-sm">
+        ← Back to Directory
+      </button>
+    </div>
+  );
 
-  const specIcon = SPECIALTY_ICONS[doctor.specialty] || "🏥";
-  const initials = doctor.full_name
-    .split(" ").map((n) => n[0]).join("").slice(0, 2);
+  const specIcon = SPEC_ICONS[doctor.specialty] || "🏥";
+  const initials = doctor.full_name.split(" ").map((n) => n[0]).join("").slice(0, 2);
+  const specLabel = doctor.specialty.replace("_", " ").replace(/\b\w/g, (c) => c.toUpperCase());
 
   return (
-    <div className="pt-4 pb-24">
+    <div className="pt-3 pb-28">
       {/* Back */}
-      <motion.button
-        initial={{ opacity: 0, x: -10 }}
-        animate={{ opacity: 1, x: 0 }}
+      <motion.button initial={{ opacity: 0, x: -8 }} animate={{ opacity: 1, x: 0 }}
         onClick={() => router.push("/")}
-        className="flex items-center gap-1 text-navy-300 text-sm mb-6 hover:text-teal-500 transition-colors"
+        className="flex items-center gap-1.5 text-ink-secondary text-[13px] font-medium mb-5 hover:text-brand-teal transition-colors"
       >
-        <svg width="16" height="16" viewBox="0 0 16 16" fill="none">
-          <path d="M10 4L6 8L10 12" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"/>
-        </svg>
-        Back to doctors
+        <svg width="14" height="14" viewBox="0 0 14 14" fill="none"><path d="M9 3L5 7L9 11" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"/></svg>
+        Back
       </motion.button>
 
-      {/* Profile header */}
-      <motion.div
-        initial={{ opacity: 0, y: 20 }}
-        animate={{ opacity: 1, y: 0 }}
-        className="glass rounded-3xl p-6 shadow-glass-lg text-center mb-4"
-      >
+      {/* Profile card */}
+      <motion.div initial={{ opacity: 0, y: 16 }} animate={{ opacity: 1, y: 0 }} className="card p-6 text-center mb-4">
+        {/* Avatar */}
         <div className="relative inline-block mb-4">
-          <div className="w-24 h-24 rounded-2xl bg-gradient-to-br from-teal-400 to-sky-400 flex items-center justify-center text-white font-display font-bold text-3xl shadow-glow mx-auto">
+          <div className="w-20 h-20 rounded-3xl bg-gradient-teal flex items-center justify-center text-white font-display font-bold text-2xl shadow-glow mx-auto">
             {initials}
           </div>
-          <div
-            className={`absolute -bottom-1 -right-1 w-5 h-5 rounded-full border-3 border-white flex items-center justify-center ${
-              doctor.is_available ? "bg-emerald-400" : "bg-red-400"
-            }`}
-          >
-            <span className="text-white text-[8px]">
-              {doctor.is_available ? "✓" : "—"}
-            </span>
+          <div className={`absolute -bottom-1 -right-1 w-5 h-5 rounded-full ring-[3px] ring-white flex items-center justify-center ${doctor.is_available ? "bg-emerald-400" : "bg-gray-300"}`}>
+            <svg width="10" height="10" viewBox="0 0 10 10" fill="none"><path d="M2.5 5L4.5 7L7.5 3" stroke="white" strokeWidth="1.3" strokeLinecap="round" strokeLinejoin="round"/></svg>
           </div>
         </div>
 
-        <div className="flex items-center justify-center gap-1.5 mb-1">
-          <h1 className="font-display font-bold text-xl text-navy-600">
-            Dr. {doctor.full_name}
-          </h1>
-          <span className="inline-flex w-5 h-5 rounded-full bg-teal-400 items-center justify-center badge-verified">
-            <svg width="12" height="12" viewBox="0 0 12 12" fill="none">
-              <path d="M3 6L5 8L9 3.5" stroke="white" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"/>
-            </svg>
+        {/* Name + badge */}
+        <div className="flex items-center justify-center gap-2 mb-1">
+          <h1 className="font-display font-bold text-[20px] text-ink-rich">Dr. {doctor.full_name}</h1>
+          <span className="w-5 h-5 rounded-full bg-brand-teal flex items-center justify-center badge-verified">
+            <svg width="11" height="11" viewBox="0 0 11 11" fill="none"><path d="M3 5.5L4.8 7.5L8 3.5" stroke="white" strokeWidth="1.4" strokeLinecap="round" strokeLinejoin="round"/></svg>
           </span>
         </div>
+        <p className="text-ink-secondary text-[13px] font-medium">{specIcon} {specLabel}</p>
 
-        <p className="text-navy-300 text-sm">
-          {specIcon} {doctor.specialty.replace("_", " ").replace(/\b\w/g, (c) => c.toUpperCase())}
-        </p>
-
-        {/* Rating */}
-        <div className="flex items-center justify-center gap-4 mt-4 text-sm">
-          <div className="text-center">
-            <p className="font-display font-bold text-lg text-navy-600">
-              {doctor.rating_avg > 0 ? `${doctor.rating_avg}` : "—"}
-            </p>
-            <p className="text-navy-200 text-xs">Rating</p>
+        {/* Stats row */}
+        <div className="flex items-center justify-center mt-5 bg-surface-muted rounded-2xl p-3 divide-x divide-surface-border">
+          <div className="flex-1 text-center">
+            <p className="font-display font-bold text-[18px] text-ink-rich">{doctor.rating_avg > 0 ? doctor.rating_avg : "—"}</p>
+            <p className="text-[10px] font-semibold text-ink-muted uppercase tracking-wider">Rating</p>
           </div>
-          <div className="w-px h-8 bg-navy-100" />
-          <div className="text-center">
-            <p className="font-display font-bold text-lg text-navy-600">
-              {doctor.rating_count}
-            </p>
-            <p className="text-navy-200 text-xs">Reviews</p>
+          <div className="flex-1 text-center">
+            <p className="font-display font-bold text-[18px] text-ink-rich">{doctor.rating_count}</p>
+            <p className="text-[10px] font-semibold text-ink-muted uppercase tracking-wider">Reviews</p>
           </div>
-          <div className="w-px h-8 bg-navy-100" />
-          <div className="text-center">
-            <p className="font-display font-bold text-lg text-navy-600">
-              {doctor.languages.map((l) => l === "am" ? "🇪🇹" : "🇬🇧").join(" ")}
-            </p>
-            <p className="text-navy-200 text-xs">Languages</p>
+          <div className="flex-1 text-center">
+            <p className="text-[18px]">{doctor.languages.map((l) => l === "am" ? "🇪🇹" : "🇬🇧").join(" ")}</p>
+            <p className="text-[10px] font-semibold text-ink-muted uppercase tracking-wider">Languages</p>
           </div>
         </div>
       </motion.div>
 
-      {/* Details */}
-      <motion.div
-        initial={{ opacity: 0, y: 20 }}
-        animate={{ opacity: 1, y: 0 }}
-        transition={{ delay: 0.1 }}
-        className="glass rounded-2xl p-5 shadow-glass space-y-4 mb-4"
-      >
+      {/* Details card */}
+      <motion.div initial={{ opacity: 0, y: 16 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.1 }} className="card p-5 space-y-4 mb-4">
         {doctor.bio && (
           <div>
-            <h3 className="font-display font-semibold text-navy-500 text-sm mb-1">About</h3>
-            <p className="text-navy-400 text-sm leading-relaxed">{doctor.bio}</p>
+            <h3 className="font-display font-semibold text-ink-rich text-[13px] mb-1.5">About</h3>
+            <p className="text-ink-body text-[13px] leading-[1.7]">{doctor.bio}</p>
           </div>
         )}
 
-        <div className="flex items-center gap-2 text-sm">
-          <span className="text-navy-200">📋</span>
-          <span className="text-navy-400">License:</span>
-          <span className="font-mono text-navy-500 text-xs bg-navy-50 px-2 py-0.5 rounded">
-            {doctor.license_number}
-          </span>
+        <div className="h-px bg-surface-border" />
+
+        <div className="flex items-center gap-3">
+          <div className="w-8 h-8 rounded-lg bg-brand-teal-light flex items-center justify-center text-[14px]">📋</div>
+          <div>
+            <p className="text-[11px] font-semibold text-ink-muted uppercase tracking-wider">License</p>
+            <p className="font-mono text-ink-body text-[13px] tracking-wide">{doctor.license_number}</p>
+          </div>
         </div>
 
-        <div className="flex items-center gap-2 text-sm">
-          <span className="text-navy-200">🟢</span>
-          <span className="text-navy-400">Status:</span>
-          <span className={`font-medium ${doctor.is_available ? "text-emerald-500" : "text-red-400"}`}>
-            {doctor.is_available ? "Available for consultations" : "Currently unavailable"}
-          </span>
+        <div className="flex items-center gap-3">
+          <div className={`w-8 h-8 rounded-lg flex items-center justify-center text-[14px] ${doctor.is_available ? "bg-emerald-50" : "bg-surface-muted"}`}>
+            {doctor.is_available ? "🟢" : "🔴"}
+          </div>
+          <div>
+            <p className="text-[11px] font-semibold text-ink-muted uppercase tracking-wider">Status</p>
+            <p className={`text-[13px] font-semibold ${doctor.is_available ? "text-emerald-600" : "text-ink-muted"}`}>
+              {doctor.is_available ? "Available for consultations" : "Currently unavailable"}
+            </p>
+          </div>
         </div>
       </motion.div>
 
       {/* CTA */}
-      <motion.div
-        initial={{ opacity: 0, y: 20 }}
-        animate={{ opacity: 1, y: 0 }}
-        transition={{ delay: 0.2 }}
-        className="fixed bottom-0 left-0 right-0 p-4 glass border-t border-white/30"
+      <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.2 }}
+        className="fixed bottom-0 left-0 right-0 bottom-bar px-5 pt-6 pb-5"
       >
         <div className="max-w-lg mx-auto">
           <button
             onClick={() => openBotLink(`book_doctor_${doctor.id}`)}
             disabled={!doctor.is_available}
-            className={`
-              w-full py-3.5 rounded-2xl font-display font-semibold text-sm transition-all duration-300
-              ${doctor.is_available
-                ? "bg-gradient-to-r from-teal-400 to-sky-400 text-white shadow-glow hover:shadow-glow/60 active:scale-[0.98]"
-                : "bg-navy-100 text-navy-300 cursor-not-allowed"
-              }
-            `}
+            className={`w-full py-3.5 rounded-2xl font-display font-bold text-[15px] tracking-[-0.01em] transition-all duration-300 ${
+              doctor.is_available
+                ? "bg-gradient-teal text-white shadow-glow active:scale-[0.98]"
+                : "bg-surface-muted text-ink-muted cursor-not-allowed"
+            }`}
           >
-            {doctor.is_available ? "Book Consultation →" : "Doctor Currently Unavailable"}
+            {doctor.is_available ? "Book Consultation →" : "Currently Unavailable"}
           </button>
         </div>
       </motion.div>

@@ -13,6 +13,7 @@ export const viewport: Viewport = {
   initialScale: 1,
   maximumScale: 1,
   userScalable: false,
+  themeColor: "#F7FAFA",
 };
 
 export default function RootLayout({
@@ -28,10 +29,10 @@ export default function RootLayout({
           strategy="beforeInteractive"
         />
       </head>
-      <body className="noise bg-surface min-h-screen min-h-dvh">
-        <div className="bg-mesh-teal min-h-screen min-h-dvh">
+      <body className="eth-lattice bg-surface-base min-h-screen min-h-dvh">
+        <div className="relative z-10 bg-hero-mesh min-h-screen min-h-dvh">
           <Header />
-          <main className="max-w-lg mx-auto px-4 pb-8">{children}</main>
+          <main className="max-w-lg mx-auto px-5 pb-8">{children}</main>
         </div>
       </body>
     </html>

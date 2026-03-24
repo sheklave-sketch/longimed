@@ -1,95 +1,119 @@
-@import url('https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&family=DM+Sans:wght@400;500;600;700&display=swap');
+@import url('https://fonts.googleapis.com/css2?family=Outfit:wght@400;500;600;700;800&family=Nunito+Sans:ital,wght@0,400;0,500;0,600;0,700;1,400&family=JetBrains+Mono:wght@400;500&display=swap');
 
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
 
-:root {
-  --teal-primary: #35C8BB;
-  --blue-accent: #1B8FD4;
-  --navy-dark: #1A2540;
-  --surface: #F5FFFE;
-}
+* { -webkit-tap-highlight-color: transparent; box-sizing: border-box; }
 
-* {
-  -webkit-tap-highlight-color: transparent;
-}
-
-body {
-  font-family: "DM Sans", system-ui, sans-serif;
-  background: var(--surface);
-  color: var(--navy-dark);
-  overflow-x: hidden;
-  -webkit-font-smoothing: antialiased;
-}
-
-/* Telegram Mini App overrides */
 html, body {
   overscroll-behavior: none;
   min-height: 100vh;
   min-height: 100dvh;
 }
 
-/* Custom scrollbar */
-::-webkit-scrollbar { width: 4px; }
-::-webkit-scrollbar-track { background: transparent; }
-::-webkit-scrollbar-thumb { background: rgba(53, 200, 187, 0.3); border-radius: 4px; }
-
-/* Glass card effect */
-.glass {
-  background: rgba(255, 255, 255, 0.72);
-  backdrop-filter: blur(16px);
-  -webkit-backdrop-filter: blur(16px);
-  border: 1px solid rgba(255, 255, 255, 0.4);
+body {
+  font-family: "Nunito Sans", system-ui, sans-serif;
+  background: #F7FAFA;
+  color: #1A2540;
+  overflow-x: hidden;
+  -webkit-font-smoothing: antialiased;
 }
 
-/* Verified badge pulse */
-@keyframes badge-pulse {
-  0%, 100% { box-shadow: 0 0 0 0 rgba(53, 200, 187, 0.4); }
-  50% { box-shadow: 0 0 0 6px rgba(53, 200, 187, 0); }
-}
-
-.badge-verified {
-  animation: badge-pulse 2s ease-in-out infinite;
-}
-
-/* Availability dot */
-.dot-available {
-  width: 10px;
-  height: 10px;
-  border-radius: 50%;
-  background: #22C55E;
-  box-shadow: 0 0 8px rgba(34, 197, 94, 0.5);
-}
-
-.dot-unavailable {
-  width: 10px;
-  height: 10px;
-  border-radius: 50%;
-  background: #EF4444;
-  opacity: 0.7;
-}
-
-/* Noise texture overlay */
-.noise::before {
+/* ── Ethiopian meskel cross lattice — ultra-subtle background ── */
+.eth-lattice::before {
   content: "";
   position: fixed;
-  top: 0; left: 0; right: 0; bottom: 0;
-  background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 256 256' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)' opacity='0.02'/%3E%3C/svg%3E");
+  inset: 0;
+  background-image: url("data:image/svg+xml,%3Csvg width='48' height='48' viewBox='0 0 48 48' xmlns='http://www.w3.org/2000/svg'%3E%3Cpath d='M24 12v8h-8v8h8v8h8v-8h8v-8h-8v-8h-8z' fill='none' stroke='%2335C8BB' stroke-width='0.4' opacity='0.06'/%3E%3C/svg%3E");
   pointer-events: none;
-  z-index: 50;
+  z-index: 0;
 }
 
-/* Stat card gradient borders */
-.stat-card {
-  position: relative;
-  overflow: hidden;
+/* ── Card system ── */
+.card {
+  background: #FFFFFF;
+  border: 1px solid #E2EAEA;
+  border-radius: 16px;
+  box-shadow: 0 1px 3px rgba(26, 37, 64, 0.06), 0 4px 16px rgba(26, 37, 64, 0.04);
+  transition: all 0.3s cubic-bezier(0.16, 1, 0.3, 1);
 }
-.stat-card::before {
-  content: "";
-  position: absolute;
-  top: 0; left: 0; right: 0;
-  height: 3px;
-  background: linear-gradient(90deg, var(--teal-primary), var(--blue-accent));
-  border-radius: 3px 3px 0 0;
+.card-interactive:hover {
+  border-color: rgba(53, 200, 187, 0.3);
+  box-shadow: 0 4px 24px rgba(26, 37, 64, 0.1), 0 0 0 1px rgba(53, 200, 187, 0.1);
+  transform: translateY(-2px);
+}
+
+/* ── Verified badge ── */
+@keyframes verify-ring {
+  0%, 100% { box-shadow: 0 0 0 0 rgba(53, 200, 187, 0.4); }
+  50% { box-shadow: 0 0 0 5px rgba(53, 200, 187, 0); }
+}
+.badge-verified { animation: verify-ring 2.5s ease-in-out infinite; }
+
+/* ── Availability indicators ── */
+@keyframes online-pulse {
+  0%, 100% { box-shadow: 0 0 0 0 rgba(34, 197, 94, 0.4); }
+  50% { box-shadow: 0 0 0 4px rgba(34, 197, 94, 0); }
+}
+.status-online {
+  width: 10px; height: 10px; border-radius: 50%;
+  background: #22C55E;
+  animation: online-pulse 2s ease-in-out infinite;
+}
+.status-offline {
+  width: 10px; height: 10px; border-radius: 50%;
+  background: #D1D5DB;
+}
+
+/* ── Stat accent bars ── */
+.stat-bar { position: relative; }
+.stat-bar::before {
+  content: ""; position: absolute; top: 0; left: 16px; right: 16px; height: 3px;
+  border-radius: 0 0 3px 3px;
+}
+.stat-bar-teal::before { background: linear-gradient(90deg, #35C8BB, #2AA89D); }
+.stat-bar-blue::before { background: linear-gradient(90deg, #1B8FD4, #1576B0); }
+.stat-bar-gold::before { background: linear-gradient(90deg, #D4A017, #B8890F); }
+.stat-bar-rose::before { background: linear-gradient(90deg, #F472B6, #EC4899); }
+
+/* ── Gradient text ── */
+.text-gradient {
+  background: linear-gradient(135deg, #35C8BB, #1B8FD4);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
+}
+
+/* ── Scrollbar ── */
+::-webkit-scrollbar { width: 3px; }
+::-webkit-scrollbar-track { background: transparent; }
+::-webkit-scrollbar-thumb { background: rgba(53, 200, 187, 0.2); border-radius: 3px; }
+
+/* ── Skeleton loading ── */
+@keyframes shimmer {
+  0% { background-position: -200% 0; }
+  100% { background-position: 200% 0; }
+}
+.skeleton {
+  background: linear-gradient(90deg, #F0F4F4 25%, #E2EAEA 50%, #F0F4F4 75%);
+  background-size: 200% 100%;
+  animation: shimmer 1.5s ease-in-out infinite;
+  border-radius: 8px;
+}
+
+/* ── Bottom bar ── */
+.bottom-bar {
+  background: linear-gradient(180deg, rgba(247, 250, 250, 0) 0%, rgba(247, 250, 250, 0.9) 25%, #F7FAFA 100%);
+  backdrop-filter: blur(8px);
+}
+
+/* ── Scrollbar-hide for pills ── */
+.scrollbar-hide::-webkit-scrollbar { display: none; }
+.scrollbar-hide { -ms-overflow-style: none; scrollbar-width: none; }
+
+/* ── Focus rings ── */
+.focus-ring:focus-visible {
+  outline: 2px solid #35C8BB;
+  outline-offset: 2px;
 }

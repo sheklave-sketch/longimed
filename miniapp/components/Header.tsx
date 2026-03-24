@@ -4,47 +4,40 @@ import Image from "next/image";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 
-const NAV_ITEMS = [
-  { href: "/", label: "Doctors", icon: "👨‍⚕️" },
-  { href: "/dashboard", label: "Dashboard", icon: "📊" },
-  { href: "/admin", label: "Admin", icon: "⚙️" },
+const NAV = [
+  { href: "/", label: "Doctors" },
+  { href: "/dashboard", label: "Dashboard" },
+  { href: "/admin", label: "Admin" },
 ];
 
 export default function Header() {
-  const pathname = usePathname();
+  const path = usePathname();
 
   return (
-    <header className="sticky top-0 z-40 glass shadow-glass">
-      <div className="max-w-lg mx-auto px-4 py-3 flex items-center justify-between">
-        <Link href="/" className="flex items-center gap-2">
-          <Image
-            src="/logo-icon.png"
-            alt="LongiMed"
-            width={32}
-            height={32}
-            className="rounded-lg"
-          />
-          <span className="font-display font-bold text-navy-600 text-lg tracking-tight">
-            LongiMed
+    <header className="sticky top-0 z-40 bg-surface-white/80 backdrop-blur-xl border-b border-surface-border">
+      <div className="max-w-lg mx-auto px-5 h-14 flex items-center justify-between">
+        <Link href="/" className="flex items-center gap-2.5">
+          <Image src="/logo-icon.png" alt="LongiMed" width={28} height={28} className="rounded-md" />
+          <span className="font-display font-bold text-ink-rich text-[17px] tracking-[-0.02em]">
+            Longi<span className="text-brand-teal">Med</span>
           </span>
         </Link>
 
-        <nav className="flex gap-1">
-          {NAV_ITEMS.map((item) => {
-            const active = pathname === item.href;
+        <nav className="flex bg-surface-muted rounded-xl p-0.5">
+          {NAV.map((item) => {
+            const active = item.href === "/" ? path === "/" : path.startsWith(item.href);
             return (
               <Link
                 key={item.href}
                 href={item.href}
                 className={`
-                  px-3 py-1.5 rounded-full text-xs font-medium transition-all duration-200
+                  px-3.5 py-1.5 rounded-lg text-[12px] font-semibold tracking-wide transition-all duration-200
                   ${active
-                    ? "bg-teal-400 text-white shadow-glow"
-                    : "text-navy-400 hover:text-navy-600 hover:bg-white/60"
+                    ? "bg-surface-white text-brand-teal shadow-soft"
+                    : "text-ink-muted hover:text-ink-body"
                   }
                 `}
               >
-                <span className="mr-1">{item.icon}</span>
                 {item.label}
               </Link>
             );
