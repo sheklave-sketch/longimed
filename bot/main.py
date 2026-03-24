@@ -67,6 +67,12 @@ def register_handlers(app: Application) -> None:
     app.add_handler(followup_approve_handler, group=0)
     app.add_handler(followup_reject_handler, group=0)
 
+    # Doctor application approve/reject/license view
+    from bot.handlers.start import doctor_approve_handler, doctor_reject_handler, doctor_license_handler
+    app.add_handler(doctor_approve_handler, group=0)
+    app.add_handler(doctor_reject_handler, group=0)
+    app.add_handler(doctor_license_handler, group=0)
+
     # Payment confirm/reject (admin notifications)
     from bot.handlers.private_session import handle_confirm_payment, handle_reject_payment
     app.add_handler(CallbackQueryHandler(handle_confirm_payment, pattern=r"^confirmpay:"), group=0)
