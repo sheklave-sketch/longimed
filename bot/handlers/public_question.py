@@ -1,20 +1,5 @@
 """
-Public Q&A flow for LongiMed Telegram bot.
-
-ConversationHandler states:
-    CATEGORY         (10) - user picks a medical category
-    ANONYMITY        (11) - user chooses anonymous / named
-    ENTER_QUESTION   (12) - user types their question
-    CONFIRM_QUESTION (13) - preview + confirm or cancel
-
-Standalone callbacks:
-    question_approve_handler  - pattern ^qmod:approve:<question_id>
-    question_reject_handler   - pattern ^qmod:reject:<question_id>
-
-Exports:
-    public_question_conv_handler
-    question_approve_handler
-    question_reject_handler
+Public Q&A flow — ask a question, admin approves, post to channel.
 """
 
 import logging
@@ -33,6 +18,7 @@ from bot.utils.keyboards import (
     category_keyboard,
     confirm_cancel_keyboard,
     admin_question_keyboard,
+    main_menu_keyboard,
 )
 from bot.database import session_factory
 from bot.models.question import Question, QuestionStatus
@@ -64,7 +50,8 @@ async def ask_entry(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
 
     lang = context.user_data.get("lang", "en")
     await query.edit_message_text(
-        text=t("ask.choose_category", lang),
+        text=f"💬 *Ask a Public Question*\n\n{t('qa_intro', lang)}\n\nStep 1 of 4 — {t('qa_select_category', lang)}",
+        parse_mode="Markdown",
         reply_markup=category_keyboard(lang),
     )
     return CATEGORY
@@ -85,7 +72,7 @@ async def category_selected(update: Update, context: ContextTypes.DEFAULT_TYPE) 
     context.user_data["question_category"] = category
 
     await query.edit_message_text(
-        text=t("ask.choose_anonymity", lang),
+        text=f"Step 2 of 4 — {t('qa_anonymous_prompt', lang)}",
         reply_markup=anonymous_keyboard(lang),
     )
     return ANONYMITY
@@ -105,7 +92,7 @@ async def anonymity_selected(update: Update, context: ContextTypes.DEFAULT_TYPE)
     context.user_data["question_anonymous"] = query.data == "anon:yes"
 
     await query.edit_message_text(
-        text=t("ask.enter_question", lang),
+        text=f"Step 3 of 4 — {t('qa_enter_question', lang)}",
     )
     return ENTER_QUESTION
 
@@ -120,28 +107,28 @@ async def receive_question_text(update: Update, context: ContextTypes.DEFAULT_TY
     text = (update.message.text or "").strip()
 
     if len(text) < 10:
-        await update.message.reply_text(t("ask.too_short", lang))
+        await update.message.reply_text("Please add a bit more detail (at least 10 characters).")
         return ENTER_QUESTION
 
     if len(text) > 1000:
-        await update.message.reply_text(t("ask.too_long", lang))
+        await update.message.reply_text("Please keep your question under 1000 characters.")
         return ENTER_QUESTION
 
     context.user_data["question_text"] = text
 
     category = context.user_data.get("question_category", "—")
     anonymous = context.user_data.get("question_anonymous", False)
-    anon_label = t("ask.anonymous_yes", lang) if anonymous else t("ask.anonymous_no", lang)
+    anon_label = "🕵️ Anonymous" if anonymous else "👤 Public"
 
-    preview = t(
-        "ask.preview",
-        lang,
-        category=category,
-        anonymous=anon_label,
-        text=text,
+    preview = (
+        f"Step 4 of 4 — *Preview*\n\n"
+        f"📂 Category: {category.title()}\n"
+        f"👁 Visibility: {anon_label}\n\n"
+        f"❓ {text}"
     )
     await update.message.reply_text(
         text=preview,
+        parse_mode="Markdown",
         reply_markup=confirm_cancel_keyboard(lang),
     )
     return CONFIRM_QUESTION
@@ -170,7 +157,7 @@ async def confirm_question(update: Update, context: ContextTypes.DEFAULT_TYPE) -
         )
         user = result.scalar_one_or_none()
         if user is None:
-            await query.edit_message_text(t("error.user_not_found", lang))
+            await query.edit_message_text(t("error_not_registered", lang))
             return ConversationHandler.END
 
         question = Question(
@@ -181,13 +168,8 @@ async def confirm_question(update: Update, context: ContextTypes.DEFAULT_TYPE) -
             status=QuestionStatus.PENDING,
         )
         session.add(question)
-        await session.flush()  # populate question.id before commit
+        await session.flush()
         question_id = question.id
-
-        # Collect admins from settings
-        admin_ids: list[int] = []
-        if hasattr(settings, "ADMIN_IDS") and settings.ADMIN_IDS:
-            admin_ids = list(settings.ADMIN_IDS)
 
         # Collect moderator telegram_ids from DB
         mod_result = await session.execute(select(Moderator))
@@ -196,17 +178,12 @@ async def confirm_question(update: Update, context: ContextTypes.DEFAULT_TYPE) -
 
         await session.commit()
 
-    notify_ids = list(set(admin_ids + mod_telegram_ids))
-
-    # Notify all admins + moderators
-    anon_label = t("ask.anonymous_yes", lang) if anonymous else t("ask.anonymous_no", lang)
-    notification_text = t(
-        "admin.new_question",
-        lang,
-        question_id=question_id,
-        category=category,
-        anonymous=anon_label,
-        text=question_text,
+    # Notify admins + moderators
+    notify_ids = list(set(settings.admin_chat_ids + mod_telegram_ids))
+    notification_text = (
+        f"📋 *New Question Pending Review* (#{question_id})\n\n"
+        f"Category: {category}\n"
+        f"_{question_text[:300]}_"
     )
     keyboard = admin_question_keyboard(question_id, lang)
 
@@ -215,12 +192,13 @@ async def confirm_question(update: Update, context: ContextTypes.DEFAULT_TYPE) -
             await context.bot.send_message(
                 chat_id=uid,
                 text=notification_text,
+                parse_mode="Markdown",
                 reply_markup=keyboard,
             )
         except Exception as exc:
             logger.warning("Failed to notify admin/mod %s: %s", uid, exc)
 
-    await query.edit_message_text(t("ask.submitted", lang))
+    await query.edit_message_text(t("qa_submitted", lang))
 
     # Clear conversation scratch data
     for key in ("question_category", "question_anonymous", "question_text"):
@@ -230,7 +208,19 @@ async def confirm_question(update: Update, context: ContextTypes.DEFAULT_TYPE) -
 
 
 # ---------------------------------------------------------------------------
-# Step 5b — Cancel
+# Step 5b — Edit: go back to enter question
+# ---------------------------------------------------------------------------
+
+async def edit_question(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
+    query = update.callback_query
+    await query.answer()
+    lang = context.user_data.get("lang", "en")
+    await query.edit_message_text(f"Step 3 of 4 — {t('qa_enter_question', lang)}")
+    return ENTER_QUESTION
+
+
+# ---------------------------------------------------------------------------
+# Step 5c — Cancel
 # ---------------------------------------------------------------------------
 
 async def cancel_question(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
@@ -239,7 +229,7 @@ async def cancel_question(update: Update, context: ContextTypes.DEFAULT_TYPE) ->
     await query.answer()
 
     lang = context.user_data.get("lang", "en")
-    await query.edit_message_text(t("ask.cancelled", lang))
+    await query.edit_message_text("Cancelled. Send /start to return to the menu.")
 
     for key in ("question_category", "question_anonymous", "question_text"):
         context.user_data.pop(key, None)
@@ -268,105 +258,71 @@ async def approve_question_cb(update: Update, context: ContextTypes.DEFAULT_TYPE
     lang = context.user_data.get("lang", "en")
     parts = query.data.split(":")  # ["qmod", "approve", "<id>"]
     if len(parts) < 3 or not parts[2].isdigit():
-        await query.answer(t("error.invalid_callback", lang), show_alert=True)
+        await query.answer("Invalid callback", show_alert=True)
         return
 
     question_id = int(parts[2])
 
     async with session_factory() as session:
-        result = await session.execute(
-            select(Question).where(Question.id == question_id)
-        )
-        question = result.scalar_one_or_none()
-
-        if question is None:
-            await query.answer(t("error.question_not_found", lang), show_alert=True)
+        question = await session.get(Question, question_id)
+        if not question:
+            await query.answer("Question not found", show_alert=True)
             return
-
         if question.status != QuestionStatus.PENDING:
-            await query.answer(t("error.already_moderated", lang), show_alert=True)
+            await query.answer("Already processed", show_alert=True)
             return
 
         question.status = QuestionStatus.APPROVED
         await session.flush()
 
-        # Fetch author's telegram_id
-        user_result = await session.execute(
-            select(User).where(User.id == question.user_id)
-        )
+        user_result = await session.execute(select(User).where(User.id == question.user_id))
         author = user_result.scalar_one_or_none()
-        author_telegram_id = author.telegram_id if author else None
+        author_tid = author.telegram_id if author else None
 
-        # Snapshot fields before session closes
-        question_category = question.category
-        question_text = question.text
-        question_is_anonymous = question.is_anonymous
+        q_category = question.category
+        q_text = question.text
+        q_anon = question.is_anonymous
 
-        # Fetch available + verified doctors in matching specialty
         doctor_result = await session.execute(
             select(Doctor).where(
-                Doctor.specialty == question_category,
+                Doctor.specialty == q_category,
                 Doctor.is_available.is_(True),
                 Doctor.is_verified.is_(True),
             )
         )
-        available_doctors = doctor_result.scalars().all()
-        doctor_telegram_ids = [d.telegram_id for d in available_doctors]
-
+        doc_tids = [d.telegram_id for d in doctor_result.scalars().all()]
         await session.commit()
 
-    # Post to public channel
-    anon_label = (
-        t("ask.anonymous_yes", lang)
-        if question_is_anonymous
-        else t("ask.anonymous_no", lang)
-    )
-    channel_text = t(
-        "channel.question_post",
-        lang,
-        question_id=question_id,
-        category=question_category,
-        anonymous=anon_label,
-        text=question_text,
-    )
-    try:
-        await context.bot.send_message(
-            chat_id=settings.PUBLIC_CHANNEL_ID,
-            text=channel_text,
-        )
-    except Exception as exc:
-        logger.error("Failed to post question %s to channel: %s", question_id, exc)
+    # Post to channel
+    display = "Anonymous" if q_anon else f"User #{question_id}"
+    cat_name = q_category.value if hasattr(q_category, 'value') else q_category
+    channel_text = f"❓ *{cat_name.title()} Question*\n\n{q_text}\n\n_— {display}_"
 
-    # Notify author
-    if author_telegram_id:
+    if settings.public_channel_id:
         try:
             await context.bot.send_message(
-                chat_id=author_telegram_id,
-                text=t("ask.approved_notify", lang, question_id=question_id),
+                chat_id=settings.public_channel_id, text=channel_text, parse_mode="Markdown",
             )
         except Exception as exc:
-            logger.warning("Failed to notify author %s: %s", author_telegram_id, exc)
+            logger.error("Channel post failed: %s", exc)
 
-    # Notify available doctors
-    doctor_notification = t(
-        "doctor.new_question_notify",
-        lang,
-        question_id=question_id,
-        category=question_category,
-        text=question_text,
-    )
-    for doc_id in doctor_telegram_ids:
+    if author_tid:
+        try:
+            await context.bot.send_message(chat_id=author_tid, text=t("qa_approved_notify", lang))
+        except Exception:
+            pass
+
+    for doc_id in doc_tids:
         try:
             await context.bot.send_message(
                 chat_id=doc_id,
-                text=doctor_notification,
+                text=f"🔔 New {cat_name.title()} question:\n\n_{q_text[:200]}_",
+                parse_mode="Markdown",
             )
-        except Exception as exc:
-            logger.warning("Failed to notify doctor %s: %s", doc_id, exc)
+        except Exception:
+            pass
 
-    await query.edit_message_text(
-        t("admin.question_approved", lang, question_id=question_id)
-    )
+    await query.edit_message_text(f"✅ Question #{question_id} approved and posted.")
 
 
 # ---------------------------------------------------------------------------
@@ -386,53 +342,39 @@ async def reject_question_cb(update: Update, context: ContextTypes.DEFAULT_TYPE)
     await query.answer()
 
     lang = context.user_data.get("lang", "en")
-    parts = query.data.split(":")  # ["qmod", "reject", "<id>"]
+    parts = query.data.split(":")
     if len(parts) < 3 or not parts[2].isdigit():
-        await query.answer(t("error.invalid_callback", lang), show_alert=True)
+        await query.answer("Invalid callback", show_alert=True)
         return
 
     question_id = int(parts[2])
 
     async with session_factory() as session:
-        result = await session.execute(
-            select(Question).where(Question.id == question_id)
-        )
-        question = result.scalar_one_or_none()
-
-        if question is None:
-            await query.answer(t("error.question_not_found", lang), show_alert=True)
+        question = await session.get(Question, question_id)
+        if not question:
+            await query.answer("Question not found", show_alert=True)
             return
-
         if question.status != QuestionStatus.PENDING:
-            await query.answer(t("error.already_moderated", lang), show_alert=True)
+            await query.answer("Already processed", show_alert=True)
             return
 
         question.status = QuestionStatus.REJECTED
         await session.flush()
 
-        user_result = await session.execute(
-            select(User).where(User.id == question.user_id)
-        )
+        user_result = await session.execute(select(User).where(User.id == question.user_id))
         author = user_result.scalar_one_or_none()
-        author_telegram_id = author.telegram_id if author else None
-
+        author_tid = author.telegram_id if author else None
         await session.commit()
 
-    # Notify author
-    if author_telegram_id:
+    if author_tid:
         try:
             await context.bot.send_message(
-                chat_id=author_telegram_id,
-                text=t("ask.rejected_notify", lang, question_id=question_id),
+                chat_id=author_tid, text=t("qa_rejected_notify", lang, reason="Not approved by moderator"),
             )
-        except Exception as exc:
-            logger.warning(
-                "Failed to notify author %s of rejection: %s", author_telegram_id, exc
-            )
+        except Exception:
+            pass
 
-    await query.edit_message_text(
-        t("admin.question_rejected", lang, question_id=question_id)
-    )
+    await query.edit_message_text(f"❌ Question #{question_id} rejected.")
 
 
 # ---------------------------------------------------------------------------
@@ -454,6 +396,7 @@ public_question_conv_handler = ConversationHandler(
         CONFIRM_QUESTION: [
             CallbackQueryHandler(confirm_question, pattern=r"^confirm$"),
             CallbackQueryHandler(cancel_question, pattern=r"^cancel$"),
+            CallbackQueryHandler(edit_question, pattern=r"^edit$"),
         ],
     },
     fallbacks=[
