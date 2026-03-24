@@ -42,7 +42,7 @@ def register_handlers(app: Application) -> None:
     # Doctor menu buttons
     from bot.handlers.menu_callbacks import handle_doc_menu, handle_patient_menu
     app.add_handler(CallbackQueryHandler(handle_doc_menu, pattern=r"^doc:"), group=0)
-    app.add_handler(CallbackQueryHandler(handle_patient_menu, pattern=r"^menu:(history|settings)$"), group=0)
+    app.add_handler(CallbackQueryHandler(handle_patient_menu, pattern=r"^menu:(history|settings|browse)$"), group=0)
 
     # Q&A approve/reject (admin notifications)
     from bot.handlers.public_question import question_approve_handler, question_reject_handler
