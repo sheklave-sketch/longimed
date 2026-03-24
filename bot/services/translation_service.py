@@ -12,7 +12,7 @@ from bot.database import session_factory
 logger = logging.getLogger(__name__)
 
 OPENROUTER_URL = "https://openrouter.ai/api/v1/chat/completions"
-AMHARIC_MODEL = "google/gemini-flash-1.5"
+AMHARIC_MODEL = "google/gemini-2.0-flash-001"
 MEDICAL_SYSTEM_PROMPT = (
     "You are a professional medical translator specializing in Ethiopian Amharic. "
     "Translate the given text accurately and naturally into Amharic. "
