@@ -35,55 +35,63 @@ def register_handlers(app: Application) -> None:
     from bot.handlers.emergency import emergency_handler
     app.add_handler(emergency_handler, group=-1)
 
-    # ── Priority 0: Deep link router (/start with payload) ───────────────
+    # ── Priority 0: Standalone callback handlers (BEFORE ConversationHandlers) ──
+    # These must fire before ConversationHandlers which can swallow callbacks.
+    from telegram.ext import CallbackQueryHandler
+
+    # Doctor menu buttons
+    from bot.handlers.menu_callbacks import handle_doc_menu, handle_patient_menu
+    app.add_handler(CallbackQueryHandler(handle_doc_menu, pattern=r"^doc:"), group=0)
+    app.add_handler(CallbackQueryHandler(handle_patient_menu, pattern=r"^menu:(history|settings)$"), group=0)
+
+    # Q&A approve/reject (admin notifications)
+    from bot.handlers.public_question import question_approve_handler, question_reject_handler
+    app.add_handler(question_approve_handler, group=0)
+    app.add_handler(question_reject_handler, group=0)
+
+    # Payment confirm/reject (admin notifications)
+    from bot.handlers.private_session import handle_confirm_payment, handle_reject_payment
+    app.add_handler(CallbackQueryHandler(handle_confirm_payment, pattern=r"^confirmpay:"), group=0)
+    app.add_handler(CallbackQueryHandler(handle_reject_payment, pattern=r"^rejectpay:"), group=0)
+
+    # Rating callback
+    from bot.handlers.private_session import rating_handler
+    app.add_handler(rating_handler, group=0)
+
+    # ── Priority 1: Deep link router (/start with payload) ────────────────
     from bot.handlers.deep_link import deep_link_handler
-    app.add_handler(deep_link_handler, group=0)
+    app.add_handler(deep_link_handler, group=1)
 
-    # ── Priority 1: Onboarding (/start no payload) ───────────────────────
+    # ── Priority 2: Onboarding (/start no payload) ────────────────────────
     from bot.handlers.start import start_conv_handler
-    app.add_handler(start_conv_handler, group=1)
+    app.add_handler(start_conv_handler, group=2)
 
-    # ── Priority 2: Public Q&A ────────────────────────────────────────────
+    # ── Priority 3: Public Q&A ConversationHandler ────────────────────────
     from bot.handlers.public_question import public_question_conv_handler
-    app.add_handler(public_question_conv_handler, group=2)
+    app.add_handler(public_question_conv_handler, group=3)
 
-    # ── Priority 3: Private session ───────────────────────────────────────
+    # ── Priority 4: Private session ConversationHandler ───────────────────
     from bot.handlers.private_session import private_session_conv_handler
-    app.add_handler(private_session_conv_handler, group=3)
+    app.add_handler(private_session_conv_handler, group=4)
 
-    # ── Priority 4: Search ────────────────────────────────────────────────
+    # ── Priority 5: Search ConversationHandler ────────────────────────────
     from bot.handlers.search import search_conv_handler
-    app.add_handler(search_conv_handler, group=4)
+    app.add_handler(search_conv_handler, group=5)
 
-    # ── Priority 5: Doctor commands ───────────────────────────────────────
+    # ── Priority 6: Doctor commands ───────────────────────────────────────
     from bot.handlers.doctor import doctor_handlers
     for handler in doctor_handlers:
-        app.add_handler(handler, group=5)
-
-    # ── Priority 6: Moderator commands ────────────────────────────────────
-    from bot.handlers.moderator import moderator_handlers
-    for handler in moderator_handlers:
         app.add_handler(handler, group=6)
 
-    # ── Priority 7a: Q&A approve/reject callbacks (global — fired from admin/mod messages) ──
-    from bot.handlers.public_question import question_approve_handler, question_reject_handler
-    app.add_handler(question_approve_handler, group=7)
-    app.add_handler(question_reject_handler, group=7)
-
-    # ── Priority 7b: Admin commands ───────────────────────────────────────
-    from bot.handlers.admin import admin_handlers
-    for handler in admin_handlers:
+    # ── Priority 7: Moderator commands ────────────────────────────────────
+    from bot.handlers.moderator import moderator_handlers
+    for handler in moderator_handlers:
         app.add_handler(handler, group=7)
 
-    # ── Priority 8a: Rating callback ───────────────────────────────────
-    from bot.handlers.private_session import rating_handler
-    app.add_handler(rating_handler, group=8)
-
-    # ── Priority 8b: Payment confirm/reject callbacks ────────────────
-    from bot.handlers.private_session import handle_confirm_payment, handle_reject_payment
-    from telegram.ext import CallbackQueryHandler
-    app.add_handler(CallbackQueryHandler(handle_confirm_payment, pattern=r"^confirmpay:"), group=8)
-    app.add_handler(CallbackQueryHandler(handle_reject_payment, pattern=r"^rejectpay:"), group=8)
+    # ── Priority 8: Admin commands ────────────────────────────────────────
+    from bot.handlers.admin import admin_handlers
+    for handler in admin_handlers:
+        app.add_handler(handler, group=8)
 
     # ── Priority 9: Relay forwarding (catch-all for active relay sessions) ──
     from bot.handlers.private_session import relay_patient_message, relay_doctor_message
