@@ -125,26 +125,32 @@ async def receive_answer(update: Update, context: ContextTypes.DEFAULT_TYPE) -> 
 
         await session.commit()
 
-    # Post answer as reply in channel
+    # Post answer to discussion group thread (linked to channel post)
     bot_me = await context.bot.get_me()
-    answer_channel_text = (
+    answer_text_formatted = (
         f"✅ Answer from Dr. {doctor_name}\n\n"
         f"{answer_text}"
     )
 
-    if settings.public_channel_id:
+    # Try discussion group first (threaded), fall back to channel reply
+    posted = False
+    if settings.discussion_group_id and channel_msg_id:
         try:
-            reply_to = channel_msg_id if channel_msg_id else None
+            await context.bot.send_message(
+                chat_id=settings.discussion_group_id,
+                text=answer_text_formatted,
+                reply_to_message_id=channel_msg_id,
+            )
+            posted = True
+        except Exception as exc:
+            logger.warning("Discussion group post failed (will try channel): %s", exc)
+
+    if not posted and settings.public_channel_id:
+        try:
             await context.bot.send_message(
                 chat_id=settings.public_channel_id,
-                text=answer_channel_text,
-                reply_to_message_id=reply_to,
-                reply_markup=InlineKeyboardMarkup([[
-                    InlineKeyboardButton(
-                        "🔄 Follow Up",
-                        url=f"https://t.me/{bot_me.username}?start=followup_{question_id}",
-                    ),
-                ]]),
+                text=answer_text_formatted,
+                reply_to_message_id=channel_msg_id if channel_msg_id else None,
             )
         except Exception as exc:
             logger.error("Channel answer post failed: %s", exc)
@@ -353,23 +359,54 @@ async def approve_followup_cb(update: Update, context: ContextTypes.DEFAULT_TYPE
         fu_text = fu.text
         await session.commit()
 
-    # Post to channel as reply
+    # Post follow-up to discussion group thread, fall back to channel
     bot_me = await context.bot.get_me()
-    if settings.public_channel_id:
+    fu_post_text = f"🔄 Follow-Up on Question #{q_id}\n\n{fu_text}\n\n— {display}"
+
+    posted = False
+    if settings.discussion_group_id and channel_msg_id:
+        try:
+            await context.bot.send_message(
+                chat_id=settings.discussion_group_id,
+                text=fu_post_text,
+                reply_to_message_id=channel_msg_id,
+            )
+            posted = True
+        except Exception as exc:
+            logger.warning("Discussion group follow-up failed: %s", exc)
+
+    if not posted and settings.public_channel_id:
         try:
             await context.bot.send_message(
                 chat_id=settings.public_channel_id,
-                text=f"🔄 Follow-Up on Question #{q_id}\n\n{fu_text}\n\n— {display}",
+                text=fu_post_text,
                 reply_to_message_id=channel_msg_id,
-                reply_markup=InlineKeyboardMarkup([[
-                    InlineKeyboardButton(
-                        "💬 Answer This",
-                        url=f"https://t.me/{bot_me.username}?start=answer_{q_id}",
-                    ),
-                ]]),
             )
         except Exception as exc:
             logger.error("Channel follow-up post failed: %s", exc)
+
+    # Notify doctors about the follow-up (Answer button in DM only)
+    from bot.models.doctor import Doctor
+    from sqlalchemy import select as sa_select
+    async with session_factory() as session:
+        if q:
+            doc_result = await session.execute(
+                sa_select(Doctor).where(
+                    Doctor.is_verified.is_(True),
+                    Doctor.is_available.is_(True),
+                )
+            )
+            for doc in doc_result.scalars():
+                try:
+                    await context.bot.send_message(
+                        chat_id=doc.telegram_id,
+                        text=f"🔄 Follow-up on Question #{q_id}:\n\n{fu_text[:200]}",
+                        reply_markup=InlineKeyboardMarkup([[
+                            InlineKeyboardButton("💬 Answer This", url=f"https://t.me/{bot_me.username}?start=answer_{q_id}"),
+                        ]]),
+                    )
+                except Exception:
+                    pass
 
     # Notify author
     if user:

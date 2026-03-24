@@ -14,6 +14,7 @@ class Settings(BaseSettings):
     telegram_bot_token: str
     admin_chat_ids: List[int] = []
     public_channel_id: int = 0
+    discussion_group_id: int = 0
     miniapp_url: str = "https://longimed.vercel.app"
 
     # Database
