@@ -145,8 +145,11 @@ async def confirm_question(update: Update, context: ContextTypes.DEFAULT_TYPE) -
     lang = context.user_data.get("lang", "en")
     telegram_id = update.effective_user.id
 
+    from bot.models.doctor import Specialty
+
     question_text = context.user_data.get("question_text", "")
-    category = context.user_data.get("question_category", "")
+    category_str = context.user_data.get("question_category", "general")
+    category = Specialty(category_str)  # convert string to enum
     anonymous = context.user_data.get("question_anonymous", False)
 
     async with session_factory() as session:
