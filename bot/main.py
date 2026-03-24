@@ -90,6 +90,7 @@ def register_handlers(app: Application) -> None:
     app.add_handler(start_conv_handler, group=3)
 
     # ── Priority 4: Public Q&A ConversationHandler ────────────────────────
+    from bot.handlers.public_question import public_question_conv_handler
     app.add_handler(public_question_conv_handler, group=4)
 
     # ── Priority 5: Private session ConversationHandler ───────────────────
