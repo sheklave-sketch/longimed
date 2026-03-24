@@ -279,16 +279,38 @@ async def approve_question_cb(update: Update, context: ContextTypes.DEFAULT_TYPE
         doc_tids = [d.telegram_id for d in doctor_result.scalars().all()]
         await session.commit()
 
-    # Post to channel
+    # Post to channel with Answer + Follow Up buttons
     display = "Anonymous" if q_anon else f"User #{question_id}"
     cat_name = q_category.value if hasattr(q_category, 'value') else q_category
-    channel_text = f"❓ *{cat_name.title()} Question*\n\n{q_text}\n\n_— {display}_"
+    channel_text = (
+        f"❓ {cat_name.title()} Question (#{question_id})\n\n"
+        f"{q_text}\n\n"
+        f"— {display}"
+    )
+
+    from telegram import InlineKeyboardButton, InlineKeyboardMarkup
+    channel_keyboard = InlineKeyboardMarkup([
+        [
+            InlineKeyboardButton("💬 Answer This", url=f"https://t.me/{(await context.bot.get_me()).username}?start=answer_{question_id}"),
+        ],
+        [
+            InlineKeyboardButton("🔄 Follow Up", url=f"https://t.me/{(await context.bot.get_me()).username}?start=followup_{question_id}"),
+        ],
+    ])
 
     if settings.public_channel_id:
         try:
-            await context.bot.send_message(
-                chat_id=settings.public_channel_id, text=channel_text, 
+            msg = await context.bot.send_message(
+                chat_id=settings.public_channel_id,
+                text=channel_text,
+                reply_markup=channel_keyboard,
             )
+            # Save channel_message_id for threading replies
+            async with session_factory() as session:
+                q = await session.get(Question, question_id)
+                if q:
+                    q.channel_message_id = msg.message_id
+                    await session.commit()
         except Exception as exc:
             logger.error("Channel post failed: %s", exc)
 
@@ -298,12 +320,19 @@ async def approve_question_cb(update: Update, context: ContextTypes.DEFAULT_TYPE
         except Exception:
             pass
 
+    # Notify doctors with Answer button
+    bot_username = (await context.bot.get_me()).username
     for doc_id in doc_tids:
         try:
             await context.bot.send_message(
                 chat_id=doc_id,
-                text=f"🔔 New {cat_name.title()} question:\n\n_{q_text[:200]}_",
-                
+                text=(
+                    f"🔔 New {cat_name.title()} question (#{question_id}):\n\n"
+                    f"{q_text[:200]}"
+                ),
+                reply_markup=InlineKeyboardMarkup([[
+                    InlineKeyboardButton("💬 Answer This", url=f"https://t.me/{bot_username}?start=answer_{question_id}"),
+                ]]),
             )
         except Exception:
             pass

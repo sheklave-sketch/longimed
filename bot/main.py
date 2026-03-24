@@ -62,6 +62,11 @@ def register_handlers(app: Application) -> None:
     app.add_handler(question_approve_handler, group=0)
     app.add_handler(question_reject_handler, group=0)
 
+    # Follow-up approve/reject
+    from bot.handlers.qa_answer import followup_approve_handler, followup_reject_handler
+    app.add_handler(followup_approve_handler, group=0)
+    app.add_handler(followup_reject_handler, group=0)
+
     # Payment confirm/reject (admin notifications)
     from bot.handlers.private_session import handle_confirm_payment, handle_reject_payment
     app.add_handler(CallbackQueryHandler(handle_confirm_payment, pattern=r"^confirmpay:"), group=0)
@@ -71,42 +76,46 @@ def register_handlers(app: Application) -> None:
     from bot.handlers.private_session import rating_handler
     app.add_handler(rating_handler, group=0)
 
-    # ── Priority 1: Deep link router (/start with payload) ────────────────
+    # ── Priority 1: Answer + Follow-up ConversationHandlers (deep link entry) ──
+    from bot.handlers.qa_answer import answer_conv_handler, followup_conv_handler
+    app.add_handler(answer_conv_handler, group=1)
+    app.add_handler(followup_conv_handler, group=1)
+
+    # ── Priority 2: Deep link router (/start with payload) ────────────────
     from bot.handlers.deep_link import deep_link_handler
-    app.add_handler(deep_link_handler, group=1)
+    app.add_handler(deep_link_handler, group=2)
 
-    # ── Priority 2: Onboarding (/start no payload) ────────────────────────
+    # ── Priority 3: Onboarding (/start no payload) ────────────────────────
     from bot.handlers.start import start_conv_handler
-    app.add_handler(start_conv_handler, group=2)
+    app.add_handler(start_conv_handler, group=3)
 
-    # ── Priority 3: Public Q&A ConversationHandler ────────────────────────
-    from bot.handlers.public_question import public_question_conv_handler
-    app.add_handler(public_question_conv_handler, group=3)
+    # ── Priority 4: Public Q&A ConversationHandler ────────────────────────
+    app.add_handler(public_question_conv_handler, group=4)
 
-    # ── Priority 4: Private session ConversationHandler ───────────────────
+    # ── Priority 5: Private session ConversationHandler ───────────────────
     from bot.handlers.private_session import private_session_conv_handler
-    app.add_handler(private_session_conv_handler, group=4)
+    app.add_handler(private_session_conv_handler, group=5)
 
-    # ── Priority 5: Search ConversationHandler ────────────────────────────
+    # ── Priority 6: Search ConversationHandler ────────────────────────────
     from bot.handlers.search import search_conv_handler
-    app.add_handler(search_conv_handler, group=5)
+    app.add_handler(search_conv_handler, group=6)
 
-    # ── Priority 6: Doctor commands ───────────────────────────────────────
+    # ── Priority 7: Doctor commands ───────────────────────────────────────
     from bot.handlers.doctor import doctor_handlers
     for handler in doctor_handlers:
-        app.add_handler(handler, group=6)
-
-    # ── Priority 7: Moderator commands ────────────────────────────────────
-    from bot.handlers.moderator import moderator_handlers
-    for handler in moderator_handlers:
         app.add_handler(handler, group=7)
 
-    # ── Priority 8: Admin commands ────────────────────────────────────────
-    from bot.handlers.admin import admin_handlers
-    for handler in admin_handlers:
+    # ── Priority 8: Moderator commands ────────────────────────────────────
+    from bot.handlers.moderator import moderator_handlers
+    for handler in moderator_handlers:
         app.add_handler(handler, group=8)
 
-    # ── Priority 9: Relay forwarding (catch-all for active relay sessions) ──
+    # ── Priority 9: Admin commands ────────────────────────────────────────
+    from bot.handlers.admin import admin_handlers
+    for handler in admin_handlers:
+        app.add_handler(handler, group=9)
+
+    # ── Priority 10: Relay forwarding (catch-all for active relay sessions) ──
     from bot.handlers.private_session import relay_patient_message, relay_doctor_message
     from telegram.ext import MessageHandler, filters
     app.add_handler(

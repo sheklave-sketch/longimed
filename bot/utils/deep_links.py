@@ -9,6 +9,8 @@ class DeepLinkType(str, Enum):
     BROWSE_SPECIALTY = "browse"
     QUESTION = "question"
     FOLLOW_UP = "follow_up"
+    ANSWER_QUESTION = "answer"
+    FOLLOWUP_QUESTION = "followup"
     DOCTOR_PROFILE = "doctor_profile"
     WAITLIST_ACCEPT = "waitlist_accept"
     REPORT = "report"
@@ -32,6 +34,10 @@ def parse_payload(payload: str | None) -> DeepLink | None:
             return DeepLink(DeepLinkType.BROWSE_SPECIALTY, {"specialty": parts[-1]})
         if payload.startswith("question_"):
             return DeepLink(DeepLinkType.QUESTION, {"question_id": int(parts[-1])})
+        if payload.startswith("answer_"):
+            return DeepLink(DeepLinkType.ANSWER_QUESTION, {"question_id": int(parts[-1])})
+        if payload.startswith("followup_") and not payload.startswith("followup_question"):
+            return DeepLink(DeepLinkType.FOLLOWUP_QUESTION, {"question_id": int(parts[-1])})
         if payload.startswith("follow_up_"):
             return DeepLink(DeepLinkType.FOLLOW_UP, {"question_id": int(parts[-1])})
         if payload.startswith("doctor_profile_"):
