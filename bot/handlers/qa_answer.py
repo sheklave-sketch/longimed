@@ -430,7 +430,7 @@ async def cancel_flow(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int
 
 answer_conv_handler = ConversationHandler(
     entry_points=[
-        CommandHandler("start", start_answer_flow, filters=filters.Regex(r"answer_\d+")),
+        CommandHandler("start", start_answer_flow),
     ],
     states={
         AWAITING_ANSWER: [
@@ -440,11 +440,12 @@ answer_conv_handler = ConversationHandler(
     fallbacks=[CommandHandler("cancel", cancel_flow)],
     conversation_timeout=600,
     name="answer_conv",
+    per_message=False,
 )
 
 followup_conv_handler = ConversationHandler(
     entry_points=[
-        CommandHandler("start", start_followup_flow, filters=filters.Regex(r"followup_\d+")),
+        CommandHandler("start", start_followup_flow),
     ],
     states={
         FOLLOWUP_ANON: [
@@ -457,6 +458,7 @@ followup_conv_handler = ConversationHandler(
     fallbacks=[CommandHandler("cancel", cancel_flow)],
     conversation_timeout=600,
     name="followup_conv",
+    per_message=False,
 )
 
 followup_approve_handler = CallbackQueryHandler(approve_followup_cb, pattern=r"^fumod:approve:\d+$")
