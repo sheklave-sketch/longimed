@@ -100,7 +100,7 @@ async def execute_search(update: Update, context: ContextTypes.DEFAULT_TYPE) -> 
     kb_buttons.append([InlineKeyboardButton(t("btn_back", lang), callback_data="back")])
 
     await update.message.reply_text(
-        text, parse_mode="Markdown",
+        text, 
         reply_markup=InlineKeyboardMarkup(kb_buttons),
     )
     return CHOOSE_TYPE

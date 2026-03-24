@@ -75,7 +75,7 @@ async def start_private_session(update: Update, context: ContextTypes.DEFAULT_TY
     await query.edit_message_text(
         f"🩺 *Private Consultation*\n\n{t('session_intro', lang)}\n\n"
         f"Step 1 of 6 — {t('session_select_package', lang)}",
-        parse_mode="Markdown",
+        
         reply_markup=_package_keyboard(lang, has_free_trial),
     )
     return SELECT_PACKAGE
@@ -166,7 +166,7 @@ async def select_specialty(update: Update, context: ContextTypes.DEFAULT_TYPE) -
             await query.edit_message_text(
                 f"Step 4 of 6 — {t('session_enter_issue', lang)}\n\n"
                 f"_Your doctor: Dr. {doc.full_name}_",
-                parse_mode="Markdown",
+                
             )
             return ENTER_ISSUE
 
@@ -254,7 +254,7 @@ async def select_anonymity(update: Update, context: ContextTypes.DEFAULT_TYPE) -
         f"📦 Package: {pkg_label}\n"
         f"👁 Mode: {mode}\n"
         f"📝 Issue: _{context.user_data.get('session_issue', '')[:100]}_",
-        parse_mode="Markdown",
+        
         reply_markup=confirm_cancel_keyboard(lang),
     )
     return CONFIRM
@@ -554,7 +554,7 @@ async def _notify_doctor_new_session(context, session_id: int, lang: str) -> Non
                     f"Issue: _{s.issue_description[:200]}_\n\n"
                     f"Use /accept_session {session_id} to start."
                 ),
-                parse_mode="Markdown",
+                
             )
         except Exception as exc:
             logger.error("Failed to notify doctor: %s", exc)
@@ -663,7 +663,7 @@ async def _notify_admin_pending_payment(context, session_id: int, telegram_id: i
                     f"Patient TG ID: {telegram_id}\n\n"
                     f"Use /confirm_payment {telegram_id} 500 once transfer is verified."
                 ),
-                parse_mode="Markdown",
+                
             )
         except Exception:
             pass

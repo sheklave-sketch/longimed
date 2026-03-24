@@ -51,7 +51,7 @@ async def ask_entry(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
     lang = context.user_data.get("lang", "en")
     await query.edit_message_text(
         text=f"💬 *Ask a Public Question*\n\n{t('qa_intro', lang)}\n\nStep 1 of 4 — {t('qa_select_category', lang)}",
-        parse_mode="Markdown",
+        
         reply_markup=category_keyboard(lang),
     )
     return CATEGORY
@@ -194,7 +194,7 @@ async def confirm_question(update: Update, context: ContextTypes.DEFAULT_TYPE) -
             await context.bot.send_message(
                 chat_id=uid,
                 text=notification_text,
-                parse_mode="Markdown",
+                
                 reply_markup=keyboard,
             )
         except Exception as exc:
@@ -303,7 +303,7 @@ async def approve_question_cb(update: Update, context: ContextTypes.DEFAULT_TYPE
     if settings.public_channel_id:
         try:
             await context.bot.send_message(
-                chat_id=settings.public_channel_id, text=channel_text, parse_mode="Markdown",
+                chat_id=settings.public_channel_id, text=channel_text, 
             )
         except Exception as exc:
             logger.error("Channel post failed: %s", exc)
@@ -319,7 +319,7 @@ async def approve_question_cb(update: Update, context: ContextTypes.DEFAULT_TYPE
             await context.bot.send_message(
                 chat_id=doc_id,
                 text=f"🔔 New {cat_name.title()} question:\n\n_{q_text[:200]}_",
-                parse_mode="Markdown",
+                
             )
         except Exception:
             pass
