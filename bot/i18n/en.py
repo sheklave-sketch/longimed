@@ -178,4 +178,71 @@ STRINGS: dict[str, str] = {
     "report_submitted": "Report received. Our team will review it shortly. 🔍",
     "report_warned": "You have received a formal warning for violating our community guidelines.",
     "report_suspended": "Your account has been suspended pending review. Contact support for assistance.",
+
+    # ── Doctor Registration ─────────────────────────────────────────────
+    "doc_reg_name": "Step 1 of 6 — What is your full name?",
+    "doc_reg_license": "Step 2 of 6 — What is your medical license number?",
+    "doc_reg_specialty": "Step 3 of 6 — What is your specialty?",
+    "doc_reg_languages": "Step 4 of 6 — What languages do you consult in?",
+    "doc_reg_bio": (
+        "Step 5 of 6 — Write a short bio about yourself.\n\n"
+        "This will be visible to patients. Include your experience and areas of focus."
+    ),
+    "doc_reg_photo": (
+        "Step 6 of 6 — Please upload a photo of your medical license.\n\n"
+        "This is required for verification. You can send it as a photo or document."
+    ),
+    "doc_reg_confirm": "Please confirm your registration:",
+    "doc_reg_pending": (
+        "Thank you! Your application is under review.\n\n"
+        "We typically respond within 48 hours. "
+        "You'll receive a message here once verified."
+    ),
+    "doc_reg_already_pending": "Your application is still under review. We'll notify you once verified. 🕐",
+    "doc_reg_approved": (
+        "🎉 Congratulations!\n\n"
+        "Your application has been approved. You are now a verified LongiMed doctor.\n\n"
+        "Use the menu below to get started."
+    ),
+    "doc_reg_rejected": (
+        "We're sorry. Your application was not approved at this time.\n\n"
+        "You may reapply by sending /start and selecting 'I'm a Doctor' again."
+    ),
+    "btn_submit_application": "✅ Submit Application",
+    "btn_lang_english": "🇬🇧 English",
+    "btn_lang_amharic": "🇪🇹 Amharic",
+    "btn_lang_both": "Both",
+
+    # ── Navigation ──────────────────────────────────────────────────────
+    "nav_back_menu": "← Back to Menu",
+    "nav_no_active_session": "No active session found. Use /menu to return to your menu.",
+    "nav_session_ended": "Session ended. Waiting for the other party to confirm.",
+    "nav_session_resolved": "Session resolved! Thank you.",
+
+    # ── Help ────────────────────────────────────────────────────────────
+    "help_patient": (
+        "📖 How to use LongiMed\n\n"
+        "💬 Ask a Question — Post a health question for our doctors\n"
+        "🩺 Private Consultation — Book a 1-on-1 session\n"
+        "👨‍⚕️ Browse Doctors — See our verified doctors\n"
+        "🔍 Search — Find past Q&A or doctors\n"
+        "📋 History — View your past questions and sessions\n\n"
+        "Commands:\n"
+        "/menu — Show your menu\n"
+        "/search — Search Q&A or doctors\n"
+        "/end — End active consultation\n"
+        "/help — Show this message"
+    ),
+    "help_doctor": (
+        "📖 Doctor Commands\n\n"
+        "📋 My Queue — View pending sessions\n"
+        "✅ Set Available — Accept new patients\n"
+        "🔴 Set Unavailable — Stop accepting patients\n"
+        "⭐ My Reviews — See your ratings\n"
+        "👤 My Profile — View your profile\n\n"
+        "Commands:\n"
+        "/menu — Show your menu\n"
+        "/end — End active consultation\n"
+        "/help — Show this message"
+    ),
 }
