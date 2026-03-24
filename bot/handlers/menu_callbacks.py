@@ -5,7 +5,7 @@ All logic is self-contained — never calls command handlers (they expect update
 """
 
 import logging
-from telegram import Update
+from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup
 from telegram.ext import ContextTypes
 
 from bot.i18n import t
@@ -89,43 +89,46 @@ async def _doc_queue(query, telegram_id: int) -> None:
         )
         sessions = s_result.scalars().all()
 
+    back_btn = InlineKeyboardMarkup([[InlineKeyboardButton("\u2190 Back to Menu", callback_data="backtomenu")]])
+
     if not sessions:
-        await query.edit_message_text("📋 Your Queue\n\nNo pending sessions.")
+        await query.edit_message_text("📋 Your Queue\n\nNo pending sessions.", reply_markup=back_btn)
         return
 
     lines = ["📋 Your Queue\n"]
     for s in sessions:
         status = s.status.value if hasattr(s.status, 'value') else s.status
         lines.append(f"  #{s.id} — {status} — {s.issue_description[:40]}...")
-        if s.status.value == "awaiting_doctor":
-            lines.append(f"    → /accept_session {s.id}")
-    await query.edit_message_text("\n".join(lines))
+    await query.edit_message_text("\n".join(lines), reply_markup=back_btn)
 
 
 async def _doc_reviews(query, telegram_id: int) -> None:
+    back_btn = InlineKeyboardMarkup([[InlineKeyboardButton("\u2190 Back to Menu", callback_data="backtomenu")]])
     doctor = await _get_doctor(telegram_id)
     if doctor:
         avg = round(doctor.rating_avg, 2) if doctor.rating_avg else 0.0
         cnt = doctor.rating_count or 0
-        await query.edit_message_text(f"⭐ Your Reviews\n\nRating: {avg}/5 ({cnt} reviews)")
+        await query.edit_message_text(f"\u2b50 Your Reviews\n\nRating: {avg}/5 ({cnt} reviews)", reply_markup=back_btn)
     else:
-        await query.edit_message_text("No reviews yet.")
+        await query.edit_message_text("No reviews yet.", reply_markup=back_btn)
 
 
 async def _doc_profile(query, telegram_id: int) -> None:
+    back_btn = InlineKeyboardMarkup([[InlineKeyboardButton("\u2190 Back to Menu", callback_data="backtomenu")]])
     doctor = await _get_doctor(telegram_id)
     if not doctor:
-        await query.edit_message_text("Profile not found.")
+        await query.edit_message_text("Profile not found.", reply_markup=back_btn)
         return
     spec = doctor.specialty.value if hasattr(doctor.specialty, 'value') else doctor.specialty
     await query.edit_message_text(
-        f"👤 Your Profile\n\n"
+        f"Your Profile\n\n"
         f"Name: Dr. {doctor.full_name}\n"
         f"Specialty: {spec.title()}\n"
         f"License: {doctor.license_number}\n"
         f"Bio: {doctor.bio or 'Not set'}\n"
         f"Available: {'Yes' if doctor.is_available else 'No'}\n"
-        f"Rating: {round(doctor.rating_avg, 2)}/5 ({doctor.rating_count} reviews)"
+        f"Rating: {round(doctor.rating_avg, 2)}/5 ({doctor.rating_count} reviews)",
+        reply_markup=back_btn,
     )
 
 
@@ -158,20 +161,24 @@ async def _browse_doctors(query, lang: str) -> None:
         )
         doctors = result.scalars().all()
 
+    back_btn = InlineKeyboardMarkup([[InlineKeyboardButton("\u2190 Back to Menu", callback_data="backtomenu")]])
+
     if not doctors:
-        await query.edit_message_text("No doctors registered yet.")
+        await query.edit_message_text("No doctors registered yet.", reply_markup=back_btn)
         return
 
-    lines = ["👨\u200d⚕️ Our Doctors\n"]
+    lines = ["Our Doctors\n"]
     for d in doctors:
         spec = d.specialty.value if hasattr(d.specialty, 'value') else d.specialty
-        avail = "🟢" if d.is_available else "🔴"
+        avail = "\U0001f7e2" if d.is_available else "\U0001f534"
         rating = f"{round(d.rating_avg, 1)}/5" if d.rating_count else "New"
-        lines.append(f"{avail} Dr. {d.full_name} — {spec.title()} ({rating})")
-    await query.edit_message_text("\n".join(lines))
+        lines.append(f"{avail} Dr. {d.full_name} \u2014 {spec.title()} ({rating})")
+    await query.edit_message_text("\n".join(lines), reply_markup=back_btn)
 
 
 async def _patient_menu_inner(query, action: str, lang: str, telegram_id: int) -> None:
+    back_btn = InlineKeyboardMarkup([[InlineKeyboardButton("\u2190 Back to Menu", callback_data="backtomenu")]])
+
     if action == "history":
         from bot.database import session_factory
         from bot.models.session import Session as ConsultSession
@@ -181,11 +188,11 @@ async def _patient_menu_inner(query, action: str, lang: str, telegram_id: int) -
 
         async with session_factory() as session:
             result = await session.execute(
-                select(User).where(User.telegram_id == update.effective_user.id)
+                select(User).where(User.telegram_id == telegram_id)
             )
             user = result.scalar_one_or_none()
             if not user:
-                await query.edit_message_text(t("error_not_registered", lang))
+                await query.edit_message_text(t("error_not_registered", lang), reply_markup=back_btn)
                 return
 
             q_result = await session.execute(
@@ -200,28 +207,28 @@ async def _patient_menu_inner(query, action: str, lang: str, telegram_id: int) -
             )
             sessions = s_result.scalars().all()
 
-        lines = ["📋 Your History\n"]
+        lines = ["Your History\n"]
 
         if questions:
             lines.append("--- Questions ---")
             for q in questions:
                 cat = q.category.value if hasattr(q.category, 'value') else q.category
-                lines.append(f"  #{q.id} [{cat}] {q.status.value} — {q.text[:50]}...")
+                lines.append(f"  #{q.id} [{cat}] {q.status.value} \u2014 {q.text[:50]}...")
         else:
             lines.append("No questions yet.")
 
         if sessions:
             lines.append("\n--- Consultations ---")
             for s in sessions:
-                lines.append(f"  #{s.id} {s.status.value} — {str(s.created_at)[:16]}")
+                lines.append(f"  #{s.id} {s.status.value} \u2014 {str(s.created_at)[:16]}")
         else:
             lines.append("\nNo consultations yet.")
 
-        await query.edit_message_text("\n".join(lines))
+        await query.edit_message_text("\n".join(lines), reply_markup=back_btn)
 
     elif action == "settings":
         from bot.utils.keyboards import language_keyboard
         await query.edit_message_text(
-            "⚙️ Settings\n\nChange your language:",
+            "Settings\n\nChange your language:",
             reply_markup=language_keyboard(),
         )

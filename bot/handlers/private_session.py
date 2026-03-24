@@ -326,9 +326,18 @@ async def confirm_session(update: Update, context: ContextTypes.DEFAULT_TYPE) ->
         session_status = new_session.status
         await session.commit()
 
+    back_btn = InlineKeyboardMarkup([
+        [InlineKeyboardButton("\u2190 Back to Menu", callback_data="backtomenu")]
+    ])
+
     # Different flow for free trial vs paid
     if package == "free_trial":
         await query.edit_message_text(t("session_awaiting", lang))
+        # Send back to menu hint
+        await query.message.reply_text(
+            "You can return to the menu while you wait.",
+            reply_markup=back_btn,
+        )
         # Notify the doctor
         await _notify_doctor_new_session(context, session_id, lang)
         # Start response timer
@@ -342,7 +351,10 @@ async def confirm_session(update: Update, context: ContextTypes.DEFAULT_TYPE) ->
               account_number="1000XXXXXXXX",
               account_name="LongiMed Health Services"),
         )
-        await query.message.reply_text(t("payment_pending", lang))
+        await query.message.reply_text(
+            t("payment_pending", lang),
+            reply_markup=back_btn,
+        )
         # Notify admin of pending payment
         await _notify_admin_pending_payment(context, session_id, update.effective_user.id, lang)
 
@@ -521,16 +533,19 @@ async def _notify_doctor_new_session(context, session_id: int, lang: str) -> Non
 
     if doctor:
         mode_label = "Anonymous (relay)" if s.is_anonymous else "Named (topic)"
+        accept_keyboard = InlineKeyboardMarkup([[
+            InlineKeyboardButton("\u2705 Accept Session", callback_data=f"accept_session:{session_id}"),
+            InlineKeyboardButton("\u274c Decline", callback_data=f"decline_session:{session_id}"),
+        ]])
         try:
             await context.bot.send_message(
                 chat_id=doctor.telegram_id,
                 text=(
-                    f"🔔 *New consultation request* (#{session_id})\n\n"
+                    f"New consultation request (#{session_id})\n\n"
                     f"Mode: {mode_label}\n"
-                    f"Issue: _{s.issue_description[:200]}_\n\n"
-                    f"Use /accept_session {session_id} to start."
+                    f"Issue: {s.issue_description[:200]}"
                 ),
-                
+                reply_markup=accept_keyboard,
             )
         except Exception as exc:
             logger.error("Failed to notify doctor: %s", exc)
@@ -575,9 +590,14 @@ async def _check_doctor_response(context: ContextTypes.DEFAULT_TYPE) -> None:
 
             # Notify new doctor
             try:
+                reassign_keyboard = InlineKeyboardMarkup([[
+                    InlineKeyboardButton("\u2705 Accept Session", callback_data=f"accept_session:{session_id}"),
+                    InlineKeyboardButton("\u274c Decline", callback_data=f"decline_session:{session_id}"),
+                ]])
                 await context.bot.send_message(
                     chat_id=next_doctor.telegram_id,
-                    text=f"🔔 Reassigned session #{session_id}. Use /accept_session {session_id}.",
+                    text=f"Reassigned session #{session_id}.",
+                    reply_markup=reassign_keyboard,
                 )
             except Exception:
                 pass

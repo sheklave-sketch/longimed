@@ -25,6 +25,14 @@ async def post_init(application: Application) -> None:
     except Exception as exc:
         logger.warning("Translation warm-up skipped: %s", exc)
 
+    # Set BotFather commands
+    try:
+        from bot.handlers.setup_commands import set_bot_commands
+        await set_bot_commands(application)
+        logger.info("Bot commands set.")
+    except Exception as exc:
+        logger.warning("Failed to set bot commands: %s", exc)
+
 
 def register_handlers(app: Application) -> None:
     """
@@ -38,6 +46,11 @@ def register_handlers(app: Application) -> None:
     # ── Priority 0: Standalone callback handlers (BEFORE ConversationHandlers) ──
     # These must fire before ConversationHandlers which can swallow callbacks.
     from telegram.ext import CallbackQueryHandler
+
+    # Navigation handlers (/menu, /help, /end, accept_session, backtomenu)
+    from bot.handlers.navigation import navigation_handlers
+    for handler in navigation_handlers:
+        app.add_handler(handler, group=0)
 
     # Doctor menu buttons
     from bot.handlers.menu_callbacks import handle_doc_menu, handle_patient_menu
