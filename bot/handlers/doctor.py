@@ -1,107 +1,56 @@
 """
 Doctor command handlers for the LongiMed bot.
-
-All handlers require the @doctor_only decorator.
-
-Commands:
-    /set_available      - mark doctor as available for sessions
-    /set_unavailable    - mark doctor as unavailable
-    /view_queue         - list sessions AWAITING_DOCTOR assigned to this doctor
-    /accept_session     - accept a session and notify the patient
-    /end_session        - initiate the resolution / close flow
-    /verify_resolution  - confirm resolution on doctor side; close if patient also confirmed
-    /my_stats           - show rating average, count, and total sessions
-
-Exports:
-    doctor_handlers  (list of Handler objects)
 """
 
 import logging
 from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup
 from telegram.ext import CommandHandler, ContextTypes
 
-from bot.i18n import t
 from bot.utils.decorators import doctor_only
 from bot.database import session_factory
 from bot.models.doctor import Doctor
 from bot.models.user import User
-from bot.config import settings
 from sqlalchemy import select, func
 
 logger = logging.getLogger(__name__)
 
 
-# ---------------------------------------------------------------------------
-# /set_available
-# ---------------------------------------------------------------------------
-
 @doctor_only
 async def set_available_cmd(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
-    """Mark this doctor as available for new consultations."""
-    lang = context.user_data.get("lang", "en")
     telegram_id = update.effective_user.id
-
     async with session_factory() as session:
-        result = await session.execute(
-            select(Doctor).where(Doctor.telegram_id == telegram_id)
-        )
+        result = await session.execute(select(Doctor).where(Doctor.telegram_id == telegram_id))
         doctor = result.scalar_one_or_none()
-
-        if doctor is None:
-            await update.message.reply_text(t("error.doctor_not_found", lang))
+        if not doctor:
+            await update.message.reply_text("Doctor record not found.")
             return
-
         doctor.is_available = True
         await session.commit()
+    await update.message.reply_text("✅ You are now available for consultations.")
 
-    await update.message.reply_text(t("doctor.now_available", lang))
-
-
-# ---------------------------------------------------------------------------
-# /set_unavailable
-# ---------------------------------------------------------------------------
 
 @doctor_only
 async def set_unavailable_cmd(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
-    """Mark this doctor as unavailable."""
-    lang = context.user_data.get("lang", "en")
     telegram_id = update.effective_user.id
-
     async with session_factory() as session:
-        result = await session.execute(
-            select(Doctor).where(Doctor.telegram_id == telegram_id)
-        )
+        result = await session.execute(select(Doctor).where(Doctor.telegram_id == telegram_id))
         doctor = result.scalar_one_or_none()
-
-        if doctor is None:
-            await update.message.reply_text(t("error.doctor_not_found", lang))
+        if not doctor:
+            await update.message.reply_text("Doctor record not found.")
             return
-
         doctor.is_available = False
         await session.commit()
+    await update.message.reply_text("🔴 You are now unavailable. No new sessions will be assigned.")
 
-    await update.message.reply_text(t("doctor.now_unavailable", lang))
-
-
-# ---------------------------------------------------------------------------
-# /view_queue
-# ---------------------------------------------------------------------------
 
 @doctor_only
 async def view_queue_cmd(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
-    """List all AWAITING_DOCTOR sessions assigned to this doctor."""
-    lang = context.user_data.get("lang", "en")
     telegram_id = update.effective_user.id
-
     async with session_factory() as session:
-        # Resolve doctor record
-        doc_result = await session.execute(
-            select(Doctor).where(Doctor.telegram_id == telegram_id)
-        )
-        doctor = doc_result.scalar_one_or_none()
-
-        if doctor is None:
-            await update.message.reply_text(t("error.doctor_not_found", lang))
+        result = await session.execute(select(Doctor).where(Doctor.telegram_id == telegram_id))
+        doctor = result.scalar_one_or_none()
+        if not doctor:
+            await update.message.reply_text("Doctor record not found.")
             return
 
         from bot.models.session import Session as ConsultSession, SessionStatus
@@ -114,336 +63,201 @@ async def view_queue_cmd(update: Update, context: ContextTypes.DEFAULT_TYPE) -> 
         sessions = s_result.scalars().all()
 
     if not sessions:
-        await update.message.reply_text(t("doctor.queue_empty", lang))
+        await update.message.reply_text("📋 Your queue is empty. No sessions waiting.")
         return
 
-    lines: list[str] = [t("doctor.queue_header", lang)]
+    lines = ["📋 Your Queue:"]
     for s in sessions:
-        lines.append(
-            t(
-                "doctor.queue_item",
-                lang,
-                id=s.id,
-                patient_id=s.patient_id,
-                created_at=str(s.created_at)[:16],
-            )
-        )
-
+        lines.append(f"  #{s.id} — user_id={s.user_id} — {str(s.created_at)[:16]}")
     await update.message.reply_text("\n".join(lines))
 
 
-# ---------------------------------------------------------------------------
-# /accept_session <id>
-# ---------------------------------------------------------------------------
-
 @doctor_only
 async def accept_session_cmd(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
-    """Accept an awaiting session and notify the patient."""
-    lang = context.user_data.get("lang", "en")
-    telegram_id = update.effective_user.id
     args = context.args or []
-
     if not args or not args[0].isdigit():
-        await update.message.reply_text(t("doctor.accept_session_usage", lang))
+        await update.message.reply_text("Usage: /accept_session <session_id>")
         return
 
     session_id = int(args[0])
+    telegram_id = update.effective_user.id
 
     async with session_factory() as session:
         from bot.models.session import Session as ConsultSession, SessionStatus
 
-        doc_result = await session.execute(
-            select(Doctor).where(Doctor.telegram_id == telegram_id)
-        )
+        doc_result = await session.execute(select(Doctor).where(Doctor.telegram_id == telegram_id))
         doctor = doc_result.scalar_one_or_none()
-
-        if doctor is None:
-            await update.message.reply_text(t("error.doctor_not_found", lang))
+        if not doctor:
+            await update.message.reply_text("Doctor record not found.")
             return
 
-        s_result = await session.execute(
-            select(ConsultSession).where(ConsultSession.id == session_id)
-        )
-        consult = s_result.scalar_one_or_none()
-
-        if consult is None:
-            await update.message.reply_text(t("error.session_not_found", lang))
+        consult = await session.get(ConsultSession, session_id)
+        if not consult:
+            await update.message.reply_text("Session not found.")
             return
-
         if consult.doctor_id != doctor.id:
-            await update.message.reply_text(t("error.session_not_yours", lang))
+            await update.message.reply_text("This session is not assigned to you.")
             return
-
         if consult.status != SessionStatus.AWAITING_DOCTOR:
-            await update.message.reply_text(
-                t("error.session_wrong_status", lang, status=consult.status.value)
-            )
+            await update.message.reply_text(f"Session is in status '{consult.status.value}', cannot accept.")
             return
 
         consult.status = SessionStatus.ACTIVE
-        patient_id = consult.patient_id
-        await session.flush()
+        patient_user_id = consult.user_id
 
-        # Get patient telegram_id
-        pat_result = await session.execute(
-            select(User).where(User.id == patient_id)
-        )
+        pat_result = await session.execute(select(User).where(User.id == patient_user_id))
         patient = pat_result.scalar_one_or_none()
-        patient_telegram_id = patient.telegram_id if patient else None
-
+        patient_tid = patient.telegram_id if patient else None
         await session.commit()
 
-    # Notify patient
-    if patient_telegram_id:
+    if patient_tid:
         try:
             await context.bot.send_message(
-                chat_id=patient_telegram_id,
-                text=t("session.doctor_accepted_notify", lang, session_id=session_id),
+                chat_id=patient_tid,
+                text=f"🩺 Dr. {doctor.full_name} has accepted your session #{session_id}. Your consultation is now active!",
             )
         except Exception as exc:
-            logger.warning(
-                "Failed to notify patient %s of session acceptance: %s",
-                patient_telegram_id,
-                exc,
-            )
+            logger.warning("Failed to notify patient: %s", exc)
 
-    await update.message.reply_text(
-        t("doctor.session_accepted", lang, session_id=session_id)
-    )
+    await update.message.reply_text(f"✅ Session #{session_id} accepted. You can now chat with the patient.")
 
-
-# ---------------------------------------------------------------------------
-# /end_session <id>
-# ---------------------------------------------------------------------------
 
 @doctor_only
 async def end_session_cmd(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
-    """
-    Initiate the resolution flow for an active session.
-    Asks the doctor to confirm, then notifies the patient.
-    Sets session status to AWAITING_RESOLUTION.
-    """
-    lang = context.user_data.get("lang", "en")
-    telegram_id = update.effective_user.id
     args = context.args or []
-
     if not args or not args[0].isdigit():
-        await update.message.reply_text(t("doctor.end_session_usage", lang))
+        await update.message.reply_text("Usage: /end_session <session_id>")
         return
 
     session_id = int(args[0])
+    telegram_id = update.effective_user.id
 
     async with session_factory() as session:
         from bot.models.session import Session as ConsultSession, SessionStatus
 
-        doc_result = await session.execute(
-            select(Doctor).where(Doctor.telegram_id == telegram_id)
-        )
+        doc_result = await session.execute(select(Doctor).where(Doctor.telegram_id == telegram_id))
         doctor = doc_result.scalar_one_or_none()
-
-        if doctor is None:
-            await update.message.reply_text(t("error.doctor_not_found", lang))
+        if not doctor:
+            await update.message.reply_text("Doctor record not found.")
             return
 
-        s_result = await session.execute(
-            select(ConsultSession).where(ConsultSession.id == session_id)
-        )
-        consult = s_result.scalar_one_or_none()
-
-        if consult is None:
-            await update.message.reply_text(t("error.session_not_found", lang))
+        consult = await session.get(ConsultSession, session_id)
+        if not consult:
+            await update.message.reply_text("Session not found.")
             return
-
         if consult.doctor_id != doctor.id:
-            await update.message.reply_text(t("error.session_not_yours", lang))
+            await update.message.reply_text("This session is not assigned to you.")
             return
-
         if consult.status != SessionStatus.ACTIVE:
-            await update.message.reply_text(
-                t("error.session_wrong_status", lang, status=consult.status.value)
-            )
-            return
-
-        consult.status = SessionStatus.AWAITING_RESOLUTION
-        patient_id = consult.patient_id
-        await session.flush()
-
-        pat_result = await session.execute(
-            select(User).where(User.id == patient_id)
-        )
-        patient = pat_result.scalar_one_or_none()
-        patient_telegram_id = patient.telegram_id if patient else None
-
-        await session.commit()
-
-    # Notify patient that the doctor has ended the session and resolution is pending
-    if patient_telegram_id:
-        try:
-            await context.bot.send_message(
-                chat_id=patient_telegram_id,
-                text=t("session.resolution_pending_notify", lang, session_id=session_id),
-            )
-        except Exception as exc:
-            logger.warning(
-                "Failed to notify patient %s of resolution pending: %s",
-                patient_telegram_id,
-                exc,
-            )
-
-    await update.message.reply_text(
-        t("doctor.session_ending", lang, session_id=session_id)
-    )
-
-
-# ---------------------------------------------------------------------------
-# /verify_resolution <id>
-# ---------------------------------------------------------------------------
-
-@doctor_only
-async def verify_resolution_cmd(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
-    """
-    Doctor confirms the resolution of a session.
-    If both doctor and patient have confirmed, the session is closed
-    and a rating keyboard is sent to the patient.
-    """
-    lang = context.user_data.get("lang", "en")
-    telegram_id = update.effective_user.id
-    args = context.args or []
-
-    if not args or not args[0].isdigit():
-        await update.message.reply_text(t("doctor.verify_resolution_usage", lang))
-        return
-
-    session_id = int(args[0])
-
-    async with session_factory() as session:
-        from bot.models.session import Session as ConsultSession, SessionStatus
-
-        doc_result = await session.execute(
-            select(Doctor).where(Doctor.telegram_id == telegram_id)
-        )
-        doctor = doc_result.scalar_one_or_none()
-
-        if doctor is None:
-            await update.message.reply_text(t("error.doctor_not_found", lang))
-            return
-
-        s_result = await session.execute(
-            select(ConsultSession).where(ConsultSession.id == session_id)
-        )
-        consult = s_result.scalar_one_or_none()
-
-        if consult is None:
-            await update.message.reply_text(t("error.session_not_found", lang))
-            return
-
-        if consult.doctor_id != doctor.id:
-            await update.message.reply_text(t("error.session_not_yours", lang))
-            return
-
-        if consult.status not in (
-            SessionStatus.AWAITING_RESOLUTION,
-            SessionStatus.ACTIVE,
-        ):
-            await update.message.reply_text(
-                t("error.session_wrong_status", lang, status=consult.status.value)
-            )
+            await update.message.reply_text(f"Session is in status '{consult.status.value}', cannot end.")
             return
 
         consult.resolution_confirmed_by_doctor = True
-        both_confirmed = (
-            consult.resolution_confirmed_by_doctor
-            and getattr(consult, "resolution_confirmed_by_patient", False)
-        )
+        patient_user_id = consult.user_id
 
-        if both_confirmed:
-            consult.status = SessionStatus.CLOSED
-
-        patient_id = consult.patient_id
-        await session.flush()
-
-        pat_result = await session.execute(
-            select(User).where(User.id == patient_id)
-        )
+        pat_result = await session.execute(select(User).where(User.id == patient_user_id))
         patient = pat_result.scalar_one_or_none()
-        patient_telegram_id = patient.telegram_id if patient else None
-
+        patient_tid = patient.telegram_id if patient else None
         await session.commit()
 
-    await update.message.reply_text(
-        t("doctor.resolution_confirmed", lang, session_id=session_id)
-    )
-
-    if both_confirmed and patient_telegram_id:
-        # Send rating keyboard to patient
-        rating_keyboard = InlineKeyboardMarkup([
-            [
-                InlineKeyboardButton("⭐ 1", callback_data=f"rate:{session_id}:1"),
-                InlineKeyboardButton("⭐ 2", callback_data=f"rate:{session_id}:2"),
-                InlineKeyboardButton("⭐ 3", callback_data=f"rate:{session_id}:3"),
-                InlineKeyboardButton("⭐ 4", callback_data=f"rate:{session_id}:4"),
-                InlineKeyboardButton("⭐ 5", callback_data=f"rate:{session_id}:5"),
-            ]
-        ])
+    if patient_tid:
         try:
             await context.bot.send_message(
-                chat_id=patient_telegram_id,
-                text=t("session.rate_doctor_prompt", lang, session_id=session_id),
-                reply_markup=rating_keyboard,
+                chat_id=patient_tid,
+                text=f"Dr. {doctor.full_name} has ended session #{session_id}.\n\nPlease confirm resolution with /verify_resolution {session_id}",
             )
         except Exception as exc:
-            logger.warning(
-                "Failed to send rating keyboard to patient %s: %s",
-                patient_telegram_id,
-                exc,
-            )
+            logger.warning("Failed to notify patient: %s", exc)
 
+    await update.message.reply_text(f"Session #{session_id} — resolution pending patient confirmation. Use /verify_resolution {session_id} to confirm on your side.")
 
-# ---------------------------------------------------------------------------
-# /my_stats
-# ---------------------------------------------------------------------------
 
 @doctor_only
-async def my_stats_cmd(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
-    """Show this doctor's rating average, rating count, and total sessions."""
-    lang = context.user_data.get("lang", "en")
+async def verify_resolution_cmd(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    args = context.args or []
+    if not args or not args[0].isdigit():
+        await update.message.reply_text("Usage: /verify_resolution <session_id>")
+        return
+
+    session_id = int(args[0])
     telegram_id = update.effective_user.id
 
     async with session_factory() as session:
-        doc_result = await session.execute(
-            select(Doctor).where(Doctor.telegram_id == telegram_id)
-        )
-        doctor = doc_result.scalar_one_or_none()
+        from bot.models.session import Session as ConsultSession, SessionStatus
 
-        if doctor is None:
-            await update.message.reply_text(t("error.doctor_not_found", lang))
+        doc_result = await session.execute(select(Doctor).where(Doctor.telegram_id == telegram_id))
+        doctor = doc_result.scalar_one_or_none()
+        if not doctor:
+            await update.message.reply_text("Doctor record not found.")
             return
 
-        from bot.models.session import Session as ConsultSession, SessionStatus
-        total_result = await session.execute(
-            select(func.count(ConsultSession.id)).where(
-                ConsultSession.doctor_id == doctor.id
-            )
-        )
-        total_sessions = total_result.scalar_one() or 0
+        consult = await session.get(ConsultSession, session_id)
+        if not consult:
+            await update.message.reply_text("Session not found.")
+            return
+        if consult.doctor_id != doctor.id:
+            await update.message.reply_text("This session is not assigned to you.")
+            return
+        if consult.status != SessionStatus.ACTIVE:
+            await update.message.reply_text(f"Session is in status '{consult.status.value}', cannot verify.")
+            return
 
-    rating_avg = round(doctor.rating_avg, 2) if doctor.rating_avg else 0.0
-    rating_count = doctor.rating_count or 0
+        consult.resolution_confirmed_by_doctor = True
+
+        # Check if both sides confirmed
+        both = consult.resolution_confirmed_by_doctor and consult.resolution_confirmed_by_patient
+        if both:
+            consult.status = SessionStatus.RESOLVED
+
+        patient_user_id = consult.user_id
+        pat_result = await session.execute(select(User).where(User.id == patient_user_id))
+        patient = pat_result.scalar_one_or_none()
+        patient_tid = patient.telegram_id if patient else None
+        await session.commit()
+
+    await update.message.reply_text(f"✅ Resolution confirmed for session #{session_id}.")
+
+    if both and patient_tid:
+        rating_kb = InlineKeyboardMarkup([[
+            InlineKeyboardButton(f"{i}⭐", callback_data=f"rate:{session_id}:{i}")
+            for i in range(1, 6)
+        ]])
+        try:
+            await context.bot.send_message(
+                chat_id=patient_tid,
+                text=f"Session #{session_id} is now resolved. How would you rate Dr. {doctor.full_name}?",
+                reply_markup=rating_kb,
+            )
+        except Exception as exc:
+            logger.warning("Failed to send rating keyboard: %s", exc)
+
+
+@doctor_only
+async def my_stats_cmd(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    telegram_id = update.effective_user.id
+
+    async with session_factory() as session:
+        doc_result = await session.execute(select(Doctor).where(Doctor.telegram_id == telegram_id))
+        doctor = doc_result.scalar_one_or_none()
+        if not doctor:
+            await update.message.reply_text("Doctor record not found.")
+            return
+
+        from bot.models.session import Session as ConsultSession
+        total_result = await session.execute(
+            select(func.count(ConsultSession.id)).where(ConsultSession.doctor_id == doctor.id)
+        )
+        total = total_result.scalar_one() or 0
+
+    avg = round(doctor.rating_avg, 2) if doctor.rating_avg else 0.0
+    cnt = doctor.rating_count or 0
 
     await update.message.reply_text(
-        t(
-            "doctor.my_stats",
-            lang,
-            rating_avg=rating_avg,
-            rating_count=rating_count,
-            total_sessions=total_sessions,
-        )
+        f"📊 Your Stats\n\n"
+        f"⭐ Rating: {avg}/5 ({cnt} reviews)\n"
+        f"📋 Total sessions: {total}"
     )
 
-
-# ---------------------------------------------------------------------------
-# Handler assembly
-# ---------------------------------------------------------------------------
 
 doctor_handlers = [
     CommandHandler("set_available", set_available_cmd),

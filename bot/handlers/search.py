@@ -21,8 +21,6 @@ logger = logging.getLogger(__name__)
 
 CHOOSE_TYPE = 30
 ENTER_TERM = 31
-
-
 async def start_search(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
     """Entry from /search command or menu:browse callback."""
     lang = context.user_data.get("lang", "en")
@@ -39,8 +37,6 @@ async def start_search(update: Update, context: ContextTypes.DEFAULT_TYPE) -> in
     else:
         await update.message.reply_text(text, reply_markup=kb)
     return CHOOSE_TYPE
-
-
 async def choose_type(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
     query = update.callback_query
     await query.answer()
@@ -57,8 +53,6 @@ async def choose_type(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int
 
     await query.edit_message_text(t("search_enter_term", lang))
     return ENTER_TERM
-
-
 async def execute_search(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
     lang = context.user_data.get("lang", "en")
     term = update.message.text.strip()
@@ -104,8 +98,6 @@ async def execute_search(update: Update, context: ContextTypes.DEFAULT_TYPE) -> 
         reply_markup=InlineKeyboardMarkup(kb_buttons),
     )
     return CHOOSE_TYPE
-
-
 async def _search_qa(term: str) -> list[dict]:
     from bot.database import session_factory
     from bot.models.question import Question, QuestionStatus
@@ -125,8 +117,6 @@ async def _search_qa(term: str) -> list[dict]:
          "text": q.text, "id": q.id}
         for q in questions
     ]
-
-
 async def _search_doctors(term: str) -> list[dict]:
     from bot.database import session_factory
     from bot.models.doctor import Doctor
@@ -154,8 +144,6 @@ async def _search_doctors(term: str) -> list[dict]:
         }
         for d in doctors
     ]
-
-
 search_conv_handler = ConversationHandler(
     entry_points=[
         CallbackQueryHandler(start_search, pattern=r"^menu:browse$"),

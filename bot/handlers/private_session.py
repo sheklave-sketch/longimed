@@ -46,8 +46,6 @@ ANONYMITY = 25
 CONFIRM = 26
 PAYMENT = 27
 ACTIVE_RELAY = 28
-
-
 # ── Entry ─────────────────────────────────────────────────────────────────
 
 async def start_private_session(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
@@ -79,8 +77,6 @@ async def start_private_session(update: Update, context: ContextTypes.DEFAULT_TY
         reply_markup=_package_keyboard(lang, has_free_trial),
     )
     return SELECT_PACKAGE
-
-
 # ── Step 1: Package ───────────────────────────────────────────────────────
 
 def _package_keyboard(lang: str, has_free_trial: bool) -> InlineKeyboardMarkup:
@@ -95,8 +91,6 @@ def _package_keyboard(lang: str, has_free_trial: bool) -> InlineKeyboardMarkup:
     )])
     buttons.append([InlineKeyboardButton(t("btn_back", lang), callback_data="back")])
     return InlineKeyboardMarkup(buttons)
-
-
 async def select_package(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
     query = update.callback_query
     await query.answer()
@@ -113,8 +107,6 @@ async def select_package(update: Update, context: ContextTypes.DEFAULT_TYPE) -> 
         reply_markup=category_keyboard(lang),
     )
     return SELECT_SPECIALTY
-
-
 # ── Step 2: Specialty ─────────────────────────────────────────────────────
 
 async def select_specialty(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
@@ -175,8 +167,6 @@ async def select_specialty(update: Update, context: ContextTypes.DEFAULT_TYPE) -
         reply_markup=doctor_list_keyboard(doctors, lang),
     )
     return SELECT_DOCTOR
-
-
 # ── Step 3: Doctor ────────────────────────────────────────────────────────
 
 async def select_doctor(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
@@ -209,8 +199,6 @@ async def select_doctor(update: Update, context: ContextTypes.DEFAULT_TYPE) -> i
         f"Step 4 of 6 — {t('session_enter_issue', lang)}",
     )
     return ENTER_ISSUE
-
-
 # ── Step 4: Issue description ─────────────────────────────────────────────
 
 async def enter_issue(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
@@ -228,8 +216,6 @@ async def enter_issue(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int
         reply_markup=anonymous_keyboard(lang),
     )
     return ANONYMITY
-
-
 # ── Step 5: Anonymity ─────────────────────────────────────────────────────
 
 async def select_anonymity(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
@@ -258,8 +244,6 @@ async def select_anonymity(update: Update, context: ContextTypes.DEFAULT_TYPE) -
         reply_markup=confirm_cancel_keyboard(lang),
     )
     return CONFIRM
-
-
 # ── Step 6: Confirm + save ────────────────────────────────────────────────
 
 async def confirm_session(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
@@ -364,8 +348,6 @@ async def confirm_session(update: Update, context: ContextTypes.DEFAULT_TYPE) ->
 
     _cleanup(context)
     return ConversationHandler.END
-
-
 # ── Relay mode: forward messages ──────────────────────────────────────────
 
 async def relay_patient_message(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
@@ -431,8 +413,6 @@ async def relay_patient_message(update: Update, context: ContextTypes.DEFAULT_TY
                 document=update.message.document.file_id,
                 caption=prefix,
             )
-
-
 async def relay_doctor_message(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     """Forward doctor message to patient via relay (anonymous sessions)."""
     from bot.database import session_factory
@@ -495,8 +475,6 @@ async def relay_doctor_message(update: Update, context: ContextTypes.DEFAULT_TYP
                 document=update.message.document.file_id,
                 caption=prefix,
             )
-
-
 # ── Rating callback ───────────────────────────────────────────────────────
 
 async def handle_rating(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
@@ -528,8 +506,6 @@ async def handle_rating(update: Update, context: ContextTypes.DEFAULT_TYPE) -> N
                 await session.commit()
 
     await query.edit_message_text(f"{'⭐' * stars}\n\n{t('rate_thanks', lang)}")
-
-
 # ── Helpers ───────────────────────────────────────────────────────────────
 
 async def _notify_doctor_new_session(context, session_id: int, lang: str) -> None:
@@ -558,8 +534,6 @@ async def _notify_doctor_new_session(context, session_id: int, lang: str) -> Non
             )
         except Exception as exc:
             logger.error("Failed to notify doctor: %s", exc)
-
-
 async def _start_doctor_timer(context, session_id: int) -> None:
     from bot.config import settings
     context.job_queue.run_once(
@@ -568,8 +542,6 @@ async def _start_doctor_timer(context, session_id: int) -> None:
         data={"session_id": session_id},
         name=f"doctor_timeout_{session_id}",
     )
-
-
 async def _check_doctor_response(context: ContextTypes.DEFAULT_TYPE) -> None:
     session_id = context.job.data["session_id"]
 
@@ -650,8 +622,6 @@ async def _check_doctor_response(context: ContextTypes.DEFAULT_TYPE) -> None:
                     )
                 except Exception:
                     pass
-
-
 async def _notify_admin_pending_payment(context, session_id: int, telegram_id: int, lang: str) -> None:
     from bot.config import settings
     for admin_id in settings.admin_chat_ids:
@@ -667,8 +637,6 @@ async def _notify_admin_pending_payment(context, session_id: int, telegram_id: i
             )
         except Exception:
             pass
-
-
 async def _join_waitlist(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
     query = update.callback_query
     lang = context.user_data.get("lang", "en")
@@ -709,23 +677,17 @@ async def _join_waitlist(update: Update, context: ContextTypes.DEFAULT_TYPE) -> 
     await query.edit_message_text(t("waitlist_joined", lang, position=position))
     _cleanup(context)
     return ConversationHandler.END
-
-
 async def _back_to_menu(update, context) -> int:
     lang = context.user_data.get("lang", "en")
     from bot.utils.keyboards import main_menu_keyboard
     await update.callback_query.edit_message_text("Main menu:", reply_markup=main_menu_keyboard(lang))
     _cleanup(context)
     return ConversationHandler.END
-
-
 def _cleanup(context) -> None:
     for key in ("session_user_id", "session_package", "session_specialty",
                 "session_doctor_id", "session_doctor_name", "session_issue",
                 "session_anonymous"):
         context.user_data.pop(key, None)
-
-
 def _get_media_type(message) -> str | None:
     if message.photo:
         return "photo"
@@ -736,8 +698,6 @@ def _get_media_type(message) -> str | None:
     if message.video:
         return "video"
     return None
-
-
 def _get_file_id(message) -> str | None:
     if message.photo:
         return message.photo[-1].file_id
@@ -748,8 +708,6 @@ def _get_file_id(message) -> str | None:
     if message.video:
         return message.video.file_id
     return None
-
-
 # ── Handler assembly ──────────────────────────────────────────────────────
 
 private_session_conv_handler = ConversationHandler(

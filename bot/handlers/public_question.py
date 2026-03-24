@@ -37,8 +37,6 @@ CATEGORY = 10
 ANONYMITY = 11
 ENTER_QUESTION = 12
 CONFIRM_QUESTION = 13
-
-
 # ---------------------------------------------------------------------------
 # Step 1 — Entry point: show categories
 # ---------------------------------------------------------------------------
@@ -55,8 +53,6 @@ async def ask_entry(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
         reply_markup=category_keyboard(lang),
     )
     return CATEGORY
-
-
 # ---------------------------------------------------------------------------
 # Step 2 — Category selected: ask about anonymity
 # ---------------------------------------------------------------------------
@@ -76,8 +72,6 @@ async def category_selected(update: Update, context: ContextTypes.DEFAULT_TYPE) 
         reply_markup=anonymous_keyboard(lang),
     )
     return ANONYMITY
-
-
 # ---------------------------------------------------------------------------
 # Step 3 — Anonymity chosen: ask for question text
 # ---------------------------------------------------------------------------
@@ -95,8 +89,6 @@ async def anonymity_selected(update: Update, context: ContextTypes.DEFAULT_TYPE)
         text=f"Step 3 of 4 — {t('qa_enter_question', lang)}",
     )
     return ENTER_QUESTION
-
-
 # ---------------------------------------------------------------------------
 # Step 4 — Receive question text: validate + show preview
 # ---------------------------------------------------------------------------
@@ -131,8 +123,6 @@ async def receive_question_text(update: Update, context: ContextTypes.DEFAULT_TY
         reply_markup=confirm_cancel_keyboard(lang),
     )
     return CONFIRM_QUESTION
-
-
 # ---------------------------------------------------------------------------
 # Step 5a — Confirm: save to DB + notify admins/mods
 # ---------------------------------------------------------------------------
@@ -207,8 +197,6 @@ async def confirm_question(update: Update, context: ContextTypes.DEFAULT_TYPE) -
         context.user_data.pop(key, None)
 
     return ConversationHandler.END
-
-
 # ---------------------------------------------------------------------------
 # Step 5b — Edit: go back to enter question
 # ---------------------------------------------------------------------------
@@ -219,8 +207,6 @@ async def edit_question(update: Update, context: ContextTypes.DEFAULT_TYPE) -> i
     lang = context.user_data.get("lang", "en")
     await query.edit_message_text(f"Step 3 of 4 — {t('qa_enter_question', lang)}")
     return ENTER_QUESTION
-
-
 # ---------------------------------------------------------------------------
 # Step 5c — Cancel
 # ---------------------------------------------------------------------------
@@ -237,8 +223,6 @@ async def cancel_question(update: Update, context: ContextTypes.DEFAULT_TYPE) ->
         context.user_data.pop(key, None)
 
     return ConversationHandler.END
-
-
 # ---------------------------------------------------------------------------
 # Standalone: approve a question
 # ---------------------------------------------------------------------------
@@ -325,8 +309,6 @@ async def approve_question_cb(update: Update, context: ContextTypes.DEFAULT_TYPE
             pass
 
     await query.edit_message_text(f"✅ Question #{question_id} approved and posted.")
-
-
 # ---------------------------------------------------------------------------
 # Standalone: reject a question
 # ---------------------------------------------------------------------------
@@ -377,8 +359,6 @@ async def reject_question_cb(update: Update, context: ContextTypes.DEFAULT_TYPE)
             pass
 
     await query.edit_message_text(f"❌ Question #{question_id} rejected.")
-
-
 # ---------------------------------------------------------------------------
 # Handler assembly
 # ---------------------------------------------------------------------------
