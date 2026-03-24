@@ -75,9 +75,15 @@ def register_handlers(app: Application) -> None:
     for handler in admin_handlers:
         app.add_handler(handler, group=7)
 
-    # ── Priority 8: Rating callback ────────────────────────────────────
+    # ── Priority 8a: Rating callback ───────────────────────────────────
     from bot.handlers.private_session import rating_handler
     app.add_handler(rating_handler, group=8)
+
+    # ── Priority 8b: Payment confirm/reject callbacks ────────────────
+    from bot.handlers.private_session import handle_confirm_payment, handle_reject_payment
+    from telegram.ext import CallbackQueryHandler
+    app.add_handler(CallbackQueryHandler(handle_confirm_payment, pattern=r"^confirmpay:"), group=8)
+    app.add_handler(CallbackQueryHandler(handle_reject_payment, pattern=r"^rejectpay:"), group=8)
 
     # ── Priority 9: Relay forwarding (catch-all for active relay sessions) ──
     from bot.handlers.private_session import relay_patient_message, relay_doctor_message

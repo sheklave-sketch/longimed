@@ -624,19 +624,124 @@ async def _check_doctor_response(context: ContextTypes.DEFAULT_TYPE) -> None:
                     pass
 async def _notify_admin_pending_payment(context, session_id: int, telegram_id: int, lang: str) -> None:
     from bot.config import settings
+    from telegram import InlineKeyboardButton, InlineKeyboardMarkup
+
+    keyboard = InlineKeyboardMarkup([[
+        InlineKeyboardButton(
+            "✅ Confirm Payment (500 ETB)",
+            callback_data=f"confirmpay:{telegram_id}:500",
+        ),
+        InlineKeyboardButton(
+            "❌ Reject",
+            callback_data=f"rejectpay:{telegram_id}:{session_id}",
+        ),
+    ]])
+
     for admin_id in settings.admin_chat_ids:
         try:
             await context.bot.send_message(
                 chat_id=admin_id,
                 text=(
-                    f"💰 *Pending payment* for session #{session_id}\n"
-                    f"Patient TG ID: {telegram_id}\n\n"
-                    f"Use /confirm_payment {telegram_id} 500 once transfer is verified."
+                    f"💰 Pending payment for session #{session_id}\n"
+                    f"Patient TG ID: {telegram_id}\n"
+                    f"Amount: 500 ETB"
                 ),
-                
+                reply_markup=keyboard,
             )
         except Exception:
             pass
+
+
+async def handle_confirm_payment(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    """One-tap payment confirmation from admin notification."""
+    query = update.callback_query
+    await query.answer()
+
+    # Check admin
+    from bot.config import settings
+    if update.effective_user.id not in settings.admin_chat_ids:
+        return
+
+    parts = query.data.split(":")  # confirmpay:<tg_id>:<amount>
+    target_tg_id = int(parts[1])
+    amount = parts[2]
+
+    from bot.database import session_factory
+    from bot.models.payment import Payment, PaymentStatus
+    from bot.models.user import User
+    from bot.models.session import Session as ConsultSession, SessionStatus
+    from sqlalchemy import select
+
+    async with session_factory() as session:
+        pay_result = await session.execute(
+            select(Payment)
+            .join(User, Payment.user_id == User.id)
+            .where(User.telegram_id == target_tg_id, Payment.status == PaymentStatus.PENDING)
+            .order_by(Payment.created_at.desc())
+            .limit(1)
+        )
+        payment = pay_result.scalar_one_or_none()
+
+        if not payment:
+            await query.edit_message_text("No pending payment found for this user.")
+            return
+
+        payment.status = PaymentStatus.COMPLETED
+        payment.confirmed_by_admin_id = update.effective_user.id
+        payment.amount_etb = float(amount)
+
+        # Also approve the related session
+        s_result = await session.execute(
+            select(ConsultSession).where(
+                ConsultSession.payment_id == payment.id,
+                ConsultSession.status == SessionStatus.PENDING_APPROVAL,
+            )
+        )
+        consult = s_result.scalar_one_or_none()
+        if consult:
+            consult.status = SessionStatus.AWAITING_DOCTOR
+            session_id = consult.id
+        else:
+            session_id = None
+
+        await session.commit()
+
+    # Notify patient
+    try:
+        await context.bot.send_message(
+            chat_id=target_tg_id,
+            text=f"✅ Your payment of {amount} ETB has been confirmed! Your session is now approved.",
+        )
+    except Exception:
+        pass
+
+    await query.edit_message_text(
+        f"✅ Payment confirmed — {amount} ETB from user {target_tg_id}."
+        + (f" Session #{session_id} approved." if session_id else "")
+    )
+
+
+async def handle_reject_payment(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    """One-tap payment rejection."""
+    query = update.callback_query
+    await query.answer()
+
+    from bot.config import settings
+    if update.effective_user.id not in settings.admin_chat_ids:
+        return
+
+    parts = query.data.split(":")
+    target_tg_id = int(parts[1])
+
+    try:
+        await context.bot.send_message(
+            chat_id=target_tg_id,
+            text="Your payment could not be verified. Please check the transfer details and try again, or contact support.",
+        )
+    except Exception:
+        pass
+
+    await query.edit_message_text(f"❌ Payment rejected for user {target_tg_id}.")
 async def _join_waitlist(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
     query = update.callback_query
     lang = context.user_data.get("lang", "en")
