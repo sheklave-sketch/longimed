@@ -75,6 +75,22 @@ def register_handlers(app: Application) -> None:
     for handler in admin_handlers:
         app.add_handler(handler, group=7)
 
+    # ── Priority 8: Rating callback ────────────────────────────────────
+    from bot.handlers.private_session import rating_handler
+    app.add_handler(rating_handler, group=8)
+
+    # ── Priority 9: Relay forwarding (catch-all for active relay sessions) ──
+    from bot.handlers.private_session import relay_patient_message, relay_doctor_message
+    from telegram.ext import MessageHandler, filters
+    app.add_handler(
+        MessageHandler(filters.ChatType.PRIVATE & (filters.TEXT | filters.PHOTO | filters.VOICE | filters.Document.ALL) & ~filters.COMMAND, relay_patient_message),
+        group=9,
+    )
+    app.add_handler(
+        MessageHandler(filters.ChatType.PRIVATE & (filters.TEXT | filters.PHOTO | filters.VOICE | filters.Document.ALL) & ~filters.COMMAND, relay_doctor_message),
+        group=10,
+    )
+
     logger.info("All handlers registered.")
 
 
