@@ -53,8 +53,13 @@ STRINGS: dict[str, str] = {
     "btn_private_consult": "🩺 Private Consultation",
     "btn_browse_doctors": "👨‍⚕️ Browse Doctors",
     "btn_call_doctor": "📞 Call a Doctor",
-    "call_header": "📞 Available Doctors — Tap to Call",
-    "call_no_doctors": "No doctors with phone numbers are available right now. Please try the in-bot consultation instead.",
+    "call_center_info": (
+        "📞 Prefer to speak with a doctor directly?\n\n"
+        "Call our LongiMed helpline:\n"
+        "+251 944 140 404\n\n"
+        "Available during working hours."
+    ),
+    "btn_call_now": "📞 Call +251 944 140 404",
     "btn_my_history": "📋 My History",
     "btn_settings": "⚙️ Settings",
     "btn_back": "← Back",
