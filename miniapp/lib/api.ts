@@ -1,5 +1,5 @@
-// Use proxy for browser calls to avoid HTTPS→HTTP mixed content
-const API_BASE = typeof window !== "undefined" ? "/api/proxy" : (process.env.NEXT_PUBLIC_API_URL || "");
+// Next.js rewrites proxy /api/* to VPS — no direct URL needed in browser
+const API_BASE = "";
 
 export interface Doctor {
   id: number;
