@@ -1,4 +1,5 @@
-const API_BASE = process.env.NEXT_PUBLIC_API_URL || "";
+// Use proxy for browser calls to avoid HTTPS→HTTP mixed content
+const API_BASE = typeof window !== "undefined" ? "/api/proxy" : (process.env.NEXT_PUBLIC_API_URL || "");
 
 export interface Doctor {
   id: number;

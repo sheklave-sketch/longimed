@@ -6,7 +6,8 @@ import StatCard from "@/components/StatCard";
 import { initTelegram, getTelegramUser } from "@/lib/telegram";
 import { adminRegisterDoctor } from "@/lib/api";
 
-const API_BASE = process.env.NEXT_PUBLIC_API_URL || "";
+// Use Next.js API proxy to avoid HTTPS→HTTP mixed content block
+const API_BASE = "/api/proxy";
 // Admin tokens — Dr. Tsegab and Moshe can access via ?token=<TOKEN>
 const ADMIN_TOKENS: Record<string, number> = {
   "longimed-admin-tsegab-2026": 348870668,
