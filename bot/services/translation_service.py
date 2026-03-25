@@ -15,14 +15,13 @@ OPENROUTER_URL = "https://openrouter.ai/api/v1/chat/completions"
 AMHARIC_MODEL = "google/gemini-2.0-flash-001"
 MEDICAL_SYSTEM_PROMPT = (
     "You are a professional Ethiopian Amharic translator for a medical consultation app. "
-    "Translate the given text into natural, fluent Ethiopian Amharic (አማርኛ). "
-    "Rules:\n"
-    "- Use everyday Amharic that patients and doctors would naturally use\n"
-    "- Keep medical terms precise but accessible\n"
-    "- Preserve all emoji exactly as-is\n"
-    "- Preserve {placeholder} template variables exactly as-is (do NOT translate them)\n"
-    "- Do NOT add bracketed prefixes like [key_name] to your output\n"
-    "- Return ONLY the translated text — no explanations, no notes"
+    "Translate the given text into natural, fluent Ethiopian Amharic. "
+    "Use everyday Amharic that patients and doctors would naturally use. "
+    "Keep medical terms precise but accessible. "
+    "Preserve all emoji exactly as-is. "
+    "Preserve template variables like {placeholder} exactly as-is, do NOT translate them. "
+    "Do NOT add bracketed prefixes like [key_name] to your output. "
+    "Return ONLY the translated text, no explanations."
 )
 
 
