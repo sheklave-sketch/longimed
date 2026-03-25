@@ -53,6 +53,10 @@ export default function AdminPanel() {
   const [docPhone, setDocPhone] = useState("");
   const [docSex, setDocSex] = useState("");
   const [docSubSpec, setDocSubSpec] = useState("");
+  const [docPhoto, setDocPhoto] = useState<File | null>(null);
+  const [docPhotoPreview, setDocPhotoPreview] = useState("");
+  const [docLicenseFile, setDocLicenseFile] = useState<File | null>(null);
+  const [docLicenseFileName, setDocLicenseFileName] = useState("");
   const [addLoading, setAddLoading] = useState(false);
   const [addSuccess, setAddSuccess] = useState(false);
   const [addError, setAddError] = useState("");
@@ -93,6 +97,31 @@ export default function AdminPanel() {
     } catch {} finally { setActionLoading(null); }
   };
 
+  const uploadFile = async (file: File): Promise<string> => {
+    const formData = new FormData();
+    formData.append("file", file);
+    const res = await fetch("/api/upload", { method: "POST", body: formData });
+    if (!res.ok) throw new Error("Upload failed");
+    const data = await res.json();
+    return data.url;
+  };
+
+  const handlePhotoChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (file) {
+      setDocPhoto(file);
+      setDocPhotoPreview(URL.createObjectURL(file));
+    }
+  };
+
+  const handleLicenseChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (file) {
+      setDocLicenseFile(file);
+      setDocLicenseFileName(file.name);
+    }
+  };
+
   const handleAddDoctor = async () => {
     if (!docName.trim() || !docLicense.trim() || !docSpecialty) {
       setAddError("Name, license number, and specialty are required.");
@@ -101,6 +130,17 @@ export default function AdminPanel() {
     setAddLoading(true);
     setAddError("");
     try {
+      // Upload files first if provided
+      let profilePhotoUrl: string | undefined;
+      let licenseDocUrl: string | undefined;
+
+      if (docPhoto) {
+        profilePhotoUrl = await uploadFile(docPhoto);
+      }
+      if (docLicenseFile) {
+        licenseDocUrl = await uploadFile(docLicenseFile);
+      }
+
       await adminRegisterDoctor({
         admin_telegram_id: adminTgId,
         full_name: docName.trim(),
@@ -112,6 +152,8 @@ export default function AdminPanel() {
         phone: docPhone || undefined,
         sex: docSex || undefined,
         sub_specialization: docSubSpec.trim() || undefined,
+        profile_photo_url: profilePhotoUrl,
+        license_document_url: licenseDocUrl,
       });
       setAddSuccess(true);
       // Update stats
@@ -122,7 +164,7 @@ export default function AdminPanel() {
       setTimeout(() => {
         setShowAddForm(false);
         setAddSuccess(false);
-        setDocName(""); setDocLicense(""); setDocSpecialty(""); setDocLangs(["en"]); setDocBio(""); setDocTgId(""); setDocPhone(""); setDocSex(""); setDocSubSpec("");
+        setDocName(""); setDocLicense(""); setDocSpecialty(""); setDocLangs(["en"]); setDocBio(""); setDocTgId(""); setDocPhone(""); setDocSex(""); setDocSubSpec(""); setDocPhoto(null); setDocPhotoPreview(""); setDocLicenseFile(null); setDocLicenseFileName("");
       }, 2000);
     } catch (err: unknown) {
       const msg = err instanceof Error ? err.message : "Failed to register doctor";
@@ -274,6 +316,34 @@ export default function AdminPanel() {
                   <label className="text-[11px] font-semibold text-ink-muted uppercase tracking-[0.08em] mb-1.5 block">Bio / Description</label>
                   <textarea value={docBio} onChange={(e) => setDocBio(e.target.value)} placeholder="Brief bio..." rows={2}
                     className="w-full bg-surface-white border border-surface-border rounded-xl px-3.5 py-2.5 text-[13px] text-ink-rich placeholder:text-ink-faint focus:outline-none focus:border-brand-teal transition-all resize-none" />
+                </div>
+
+                {/* Photo Upload */}
+                <div>
+                  <label className="text-[11px] font-semibold text-ink-muted uppercase tracking-[0.08em] mb-1.5 block">Profile Photo</label>
+                  <div className="flex items-center gap-3">
+                    {docPhotoPreview ? (
+                      <img src={docPhotoPreview} alt="Preview" className="w-16 h-16 rounded-xl object-cover border border-surface-border" />
+                    ) : (
+                      <div className="w-16 h-16 rounded-xl bg-surface-muted flex items-center justify-center text-[24px]">📷</div>
+                    )}
+                    <label className="flex-1 py-2.5 rounded-xl bg-surface-muted text-ink-body text-[12px] font-semibold text-center cursor-pointer hover:bg-surface-border transition-all">
+                      {docPhoto ? "Change Photo" : "Upload Photo"}
+                      <input type="file" accept="image/*" onChange={handlePhotoChange} className="hidden" />
+                    </label>
+                  </div>
+                </div>
+
+                {/* License Upload */}
+                <div>
+                  <label className="text-[11px] font-semibold text-ink-muted uppercase tracking-[0.08em] mb-1.5 block">License Document</label>
+                  <label className="flex items-center gap-3 py-3 px-4 rounded-xl bg-surface-muted cursor-pointer hover:bg-surface-border transition-all">
+                    <span className="text-[18px]">📄</span>
+                    <span className="text-[12px] font-semibold text-ink-body flex-1">
+                      {docLicenseFileName || "Upload license (photo or PDF)"}
+                    </span>
+                    <input type="file" accept="image/*,.pdf" onChange={handleLicenseChange} className="hidden" />
+                  </label>
                 </div>
 
                 <div className="pt-2 border-t border-surface-border">

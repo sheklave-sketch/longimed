@@ -9,8 +9,12 @@ from __future__ import annotations
 import logging
 
 import httpx
-from fastapi import FastAPI, HTTPException, Request
+import os
+import uuid
+
+from fastapi import FastAPI, HTTPException, Request, UploadFile, File
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.staticfiles import StaticFiles
 
 from bot.config import settings
 
@@ -28,6 +32,34 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+
+# ── Static file serving for uploads ──────────────────────────────────────────
+
+UPLOAD_DIR = "/app/uploads" if os.path.exists("/app") else os.path.join(os.path.dirname(__file__), "..", "uploads")
+os.makedirs(UPLOAD_DIR, exist_ok=True)
+app.mount("/uploads", StaticFiles(directory=UPLOAD_DIR), name="uploads")
+
+
+@app.post("/api/upload")
+async def upload_file(file: UploadFile = File(...)):
+    """Upload a photo/document. Returns the public URL."""
+    if not file.content_type or not file.content_type.startswith(("image/", "application/pdf")):
+        raise HTTPException(status_code=400, detail="Only images and PDFs are accepted")
+
+    if file.size and file.size > 10 * 1024 * 1024:
+        raise HTTPException(status_code=400, detail="File too large (max 10MB)")
+
+    ext = file.filename.rsplit(".", 1)[-1] if file.filename and "." in file.filename else "jpg"
+    filename = f"{uuid.uuid4().hex}.{ext}"
+    filepath = os.path.join(UPLOAD_DIR, filename)
+
+    content = await file.read()
+    with open(filepath, "wb") as f:
+        f.write(content)
+
+    # Return relative URL — served by static mount above
+    return {"url": f"/uploads/{filename}", "filename": filename}
 
 
 # ── Telegram notification helper ─────────────────────────────────────────────
@@ -783,6 +815,8 @@ async def admin_register_doctor(request: Request):
     phone = body.get("phone")
     sex = body.get("sex")
     sub_specialization = body.get("sub_specialization")
+    profile_photo_url = body.get("profile_photo_url")
+    license_document_url = body.get("license_document_url")
 
     if not full_name or not license_number or not specialty:
         raise HTTPException(status_code=400, detail="full_name, license_number, and specialty are required")
@@ -842,6 +876,8 @@ async def admin_register_doctor(request: Request):
                 bio=bio,
                 sex=sex_enum,
                 sub_specialization=sub_specialization,
+                profile_photo_file_id=profile_photo_url,
+                license_document_file_id=license_document_url,
                 is_verified=True,
                 is_available=True,
                 registration_status=RegistrationStatus.APPROVED,
