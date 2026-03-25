@@ -40,7 +40,7 @@ async def handle_doc_menu(update: Update, context: ContextTypes.DEFAULT_TYPE) ->
         elif action == "unavailable":
             await _doc_set_availability(query, update.effective_user.id, False)
         elif action == "schedule":
-            await query.edit_message_text("📅 Schedule management coming soon.")
+            await _doc_schedule(query, update.effective_user.id)
         elif action == "reviews":
             await _doc_reviews(query, update.effective_user.id)
         elif action == "profile":
@@ -132,6 +132,95 @@ async def _doc_profile(query, telegram_id: int) -> None:
     )
 
 
+DAYS = ["monday", "tuesday", "wednesday", "thursday", "friday", "saturday", "sunday"]
+DAY_LABELS = {"monday": "Mon", "tuesday": "Tue", "wednesday": "Wed", "thursday": "Thu",
+              "friday": "Fri", "saturday": "Sat", "sunday": "Sun"}
+SLOTS = ["morning", "afternoon", "evening"]
+SLOT_LABELS = {"morning": "🌅 9-12", "afternoon": "☀️ 12-17", "evening": "🌙 17-21"}
+
+
+async def _doc_schedule(query, telegram_id: int) -> None:
+    """Show doctor's availability schedule with toggle buttons."""
+    from bot.models.doctor import Doctor
+    from sqlalchemy import select
+    async with session_factory() as session:
+        result = await session.execute(
+            select(Doctor).where(Doctor.telegram_id == telegram_id)
+        )
+        doctor = result.scalar_one_or_none()
+        if not doctor:
+            await query.edit_message_text("Doctor record not found.")
+            return
+        schedule = doctor.availability_schedule or {}
+
+    lines = ["📅 Your Availability Schedule\n"]
+    lines.append("Tap a slot to toggle it on/off:\n")
+
+    for day in DAYS:
+        day_slots = schedule.get(day, [])
+        slot_status = []
+        for s in SLOTS:
+            if s in day_slots:
+                slot_status.append(f"✅ {SLOT_LABELS[s]}")
+            else:
+                slot_status.append(f"⬜ {SLOT_LABELS[s]}")
+        lines.append(f"**{DAY_LABELS[day]}**: {' | '.join(slot_status)}")
+
+    # Build toggle buttons — 3 buttons per day row
+    buttons = []
+    for day in DAYS:
+        day_slots = schedule.get(day, [])
+        row = []
+        for s in SLOTS:
+            is_on = s in day_slots
+            label = f"{'✅' if is_on else '⬜'} {DAY_LABELS[day]} {s[:3]}"
+            row.append(InlineKeyboardButton(label, callback_data=f"sched:{day}:{s}"))
+        buttons.append(row)
+
+    buttons.append([InlineKeyboardButton("← Back to Menu", callback_data="backtomenu")])
+
+    await query.edit_message_text(
+        "\n".join(lines),
+        reply_markup=InlineKeyboardMarkup(buttons),
+    )
+
+
+async def handle_schedule_toggle(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    """Toggle a day/slot on or off in doctor's schedule."""
+    query = update.callback_query
+    await query.answer()
+
+    parts = query.data.split(":")  # sched:<day>:<slot>
+    day = parts[1]
+    slot = parts[2]
+
+    from bot.models.doctor import Doctor
+    from sqlalchemy import select
+    async with session_factory() as session:
+        result = await session.execute(
+            select(Doctor).where(Doctor.telegram_id == update.effective_user.id)
+        )
+        doctor = result.scalar_one_or_none()
+        if not doctor:
+            await query.edit_message_text("Doctor record not found.")
+            return
+
+        schedule = dict(doctor.availability_schedule or {})
+        day_slots = list(schedule.get(day, []))
+
+        if slot in day_slots:
+            day_slots.remove(slot)
+        else:
+            day_slots.append(slot)
+
+        schedule[day] = day_slots
+        doctor.availability_schedule = schedule
+        await session.commit()
+
+    # Re-render the schedule view
+    await _doc_schedule(query, update.effective_user.id)
+
+
 # ── Patient menu buttons ──────────────────────────────────────────────────
 
 async def handle_patient_menu(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
@@ -154,26 +243,85 @@ async def _browse_doctors(query, lang: str) -> None:
     from bot.models.doctor import Doctor
     from sqlalchemy import select
     async with session_factory() as session:
+        # Available doctors first, then unavailable
         result = await session.execute(
             select(Doctor).where(
                 Doctor.is_verified.is_(True),
-            )
+            ).order_by(Doctor.is_available.desc(), Doctor.rating_avg.desc())
         )
         doctors = result.scalars().all()
 
-    back_btn = InlineKeyboardMarkup([[InlineKeyboardButton("\u2190 Back to Menu", callback_data="backtomenu")]])
-
     if not doctors:
+        back_btn = InlineKeyboardMarkup([[InlineKeyboardButton("\u2190 Back to Menu", callback_data="backtomenu")]])
         await query.edit_message_text("No doctors registered yet.", reply_markup=back_btn)
         return
 
-    lines = ["Our Doctors\n"]
-    for d in doctors:
-        spec = d.specialty.value if hasattr(d.specialty, 'value') else d.specialty
-        avail = "\U0001f7e2" if d.is_available else "\U0001f534"
-        rating = f"{round(d.rating_avg, 1)}/5" if d.rating_count else "New"
-        lines.append(f"{avail} Dr. {d.full_name} \u2014 {spec.title()} ({rating})")
-    await query.edit_message_text("\n".join(lines), reply_markup=back_btn)
+    available = [d for d in doctors if d.is_available]
+    unavailable = [d for d in doctors if not d.is_available]
+
+    lines = ["👨‍⚕️ Available Doctors\n"]
+    if available:
+        for d in available:
+            spec = d.specialty.value if hasattr(d.specialty, 'value') else d.specialty
+            rating = f"⭐ {round(d.rating_avg, 1)}/5" if d.rating_count else "New"
+            # Schedule summary
+            sched = d.availability_schedule or {}
+            active_days = [DAY_LABELS[day] for day in DAYS if sched.get(day)]
+            sched_str = f" | {', '.join(active_days)}" if active_days else ""
+            lines.append(f"🟢 Dr. {d.full_name} — {spec.title()} ({rating}){sched_str}")
+    else:
+        lines.append("No doctors are currently available.")
+
+    if unavailable:
+        lines.append("\n🔴 Currently Unavailable:")
+        for d in unavailable:
+            spec = d.specialty.value if hasattr(d.specialty, 'value') else d.specialty
+            lines.append(f"  Dr. {d.full_name} — {spec.title()}")
+
+    # Build buttons — book button for each available doctor
+    buttons = []
+    for d in available:
+        buttons.append([InlineKeyboardButton(
+            f"📅 Book Dr. {d.full_name}",
+            callback_data=f"bookdoc:{d.id}",
+        )])
+
+    buttons.append([InlineKeyboardButton("\u2190 Back to Menu", callback_data="backtomenu")])
+    await query.edit_message_text("\n".join(lines), reply_markup=InlineKeyboardMarkup(buttons))
+
+
+async def handle_book_doctor(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    """Patient clicks 'Book Dr. X' from browse — redirects to consultation flow."""
+    query = update.callback_query
+    await query.answer()
+    doctor_id = int(query.data.split(":")[1])
+    lang = context.user_data.get("lang", "en")
+
+    from bot.models.doctor import Doctor
+    async with session_factory() as session:
+        doctor = await session.get(Doctor, doctor_id)
+        if not doctor or not doctor.is_available:
+            await query.edit_message_text(
+                "This doctor is no longer available. Please try another.",
+                reply_markup=InlineKeyboardMarkup([[
+                    InlineKeyboardButton("👨‍⚕️ Browse Doctors", callback_data="menu:browse"),
+                    InlineKeyboardButton("← Back to Menu", callback_data="backtomenu"),
+                ]]),
+            )
+            return
+        spec = doctor.specialty.value if hasattr(doctor.specialty, 'value') else doctor.specialty
+
+    # Store preselected doctor and redirect to consultation
+    context.user_data["preselected_doctor_id"] = doctor_id
+    context.user_data["session_specialty"] = spec
+    await query.edit_message_text(
+        f"📅 Booking with Dr. {doctor.full_name} ({spec.title()})\n\n"
+        f"Redirecting to consultation flow...",
+        reply_markup=InlineKeyboardMarkup([
+            [InlineKeyboardButton("🩺 Start Consultation", callback_data="menu:consult")],
+            [InlineKeyboardButton("← Back to Menu", callback_data="backtomenu")],
+        ]),
+    )
 
 
 async def _patient_menu_inner(query, action: str, lang: str, telegram_id: int) -> None:

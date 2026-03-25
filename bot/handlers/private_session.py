@@ -126,15 +126,18 @@ async def select_specialty(update: Update, context: ContextTypes.DEFAULT_TYPE) -
     specialty = query.data.split(":")[1]
     context.user_data["session_specialty"] = specialty
 
-    # Fetch available doctors
+    # Fetch available doctors — include GENERAL doctors for all specialties
     from bot.database import session_factory
     from bot.models.doctor import Doctor, Specialty
-    from sqlalchemy import select
+    from sqlalchemy import select, or_
 
     async with session_factory() as session:
         result = await session.execute(
             select(Doctor).where(
-                Doctor.specialty == Specialty(specialty),
+                or_(
+                    Doctor.specialty == Specialty(specialty),
+                    Doctor.specialty == Specialty.GENERAL,
+                ),
                 Doctor.is_verified.is_(True),
                 Doctor.is_available.is_(True),
             )

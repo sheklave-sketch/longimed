@@ -6,7 +6,7 @@ from datetime import datetime
 from sqlalchemy import (
     BigInteger, Boolean, DateTime, Enum, Float, Integer, String, Text, func,
 )
-from sqlalchemy.dialects.postgresql import ARRAY
+from sqlalchemy.dialects.postgresql import ARRAY, JSONB
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from bot.database import Base
@@ -48,6 +48,7 @@ class Doctor(Base):
     max_concurrent_patients: Mapped[int] = mapped_column(Integer, default=3, nullable=False)
     rating_avg: Mapped[float] = mapped_column(Float, default=0.0, nullable=False)
     rating_count: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
+    availability_schedule: Mapped[dict | None] = mapped_column(JSONB, nullable=True)
     applied_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), server_default=func.now(), nullable=False

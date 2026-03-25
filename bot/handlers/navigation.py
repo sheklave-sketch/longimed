@@ -16,6 +16,7 @@ from bot.models.user import User
 from bot.models.relay_message import RelayMessage, SenderRole
 from bot.i18n import t
 from bot.utils.keyboards import main_menu_keyboard, doctor_menu_keyboard, rating_keyboard
+from bot.config import settings
 from sqlalchemy import select
 
 logger = logging.getLogger(__name__)
@@ -146,13 +147,22 @@ async def end_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> Non
                         reply_markup=back_btn,
                     )
 
-                    # Send rating keyboard to patient
+                    # Send rating + follow-up option to patient
                     if patient_user:
                         try:
+                            followup_kb = InlineKeyboardMarkup([
+                                [InlineKeyboardButton(
+                                    f"{'⭐' * i}", callback_data=f"rate:{session_id}:{i}"
+                                ) for i in range(1, 6)],
+                                [InlineKeyboardButton(
+                                    "💬 Send Follow-Up Message",
+                                    callback_data=f"session_followup:{session_id}",
+                                )],
+                            ])
                             await context.bot.send_message(
                                 chat_id=patient_user.telegram_id,
-                                text="Your session has been resolved. Please rate your experience:",
-                                reply_markup=rating_keyboard(session_id),
+                                text="Your session has been resolved.\n\nPlease rate your experience, or send a follow-up message if you have additional questions:",
+                                reply_markup=followup_kb,
                             )
                         except Exception as exc:
                             logger.error("Failed to send rating to patient: %s", exc)
@@ -212,9 +222,18 @@ async def end_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> Non
                     session_id = active_session.id
                     await session.commit()
 
+                    followup_kb = InlineKeyboardMarkup([
+                        [InlineKeyboardButton(
+                            f"{'⭐' * i}", callback_data=f"rate:{session_id}:{i}"
+                        ) for i in range(1, 6)],
+                        [InlineKeyboardButton(
+                            "💬 Send Follow-Up Message",
+                            callback_data=f"session_followup:{session_id}",
+                        )],
+                    ])
                     await update.message.reply_text(
-                        "Session resolved. Please rate your experience:",
-                        reply_markup=rating_keyboard(session_id),
+                        "Session resolved.\n\nPlease rate your experience, or send a follow-up if needed:",
+                        reply_markup=followup_kb,
                     )
                 else:
                     doctor_obj = await session.get(Doctor, active_session.doctor_id) if active_session.doctor_id else None
@@ -393,6 +412,139 @@ async def back_to_menu_callback(update: Update, context: ContextTypes.DEFAULT_TY
         )
 
 
+# ── Session follow-up (post-consultation message) ──────────────────────
+
+async def session_followup_callback(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    """Patient clicks 'Send Follow-Up Message' after session resolves."""
+    query = update.callback_query
+    await query.answer()
+    session_id = int(query.data.split(":")[1])
+
+    context.user_data["session_followup_id"] = session_id
+    await query.edit_message_text(
+        "💬 Type your follow-up message below.\n"
+        "This will be sent directly to the doctor who treated you.\n\n"
+        "Type /cancel to cancel."
+    )
+
+
+async def session_followup_message(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    """Forward a post-session follow-up message from patient to doctor."""
+    session_id = context.user_data.get("session_followup_id")
+    if not session_id:
+        return
+
+    text = update.message.text.strip()
+    if text.startswith("/"):
+        context.user_data.pop("session_followup_id", None)
+        return
+
+    try:
+        async with session_factory() as session:
+            s = await session.get(ConsultSession, session_id)
+            if not s or not s.doctor_id:
+                await update.message.reply_text("Session not found.", reply_markup=back_btn)
+                context.user_data.pop("session_followup_id", None)
+                return
+
+            doctor = await session.get(Doctor, s.doctor_id)
+            patient = await session.get(User, s.user_id)
+
+        if doctor:
+            patient_label = "Anonymous patient" if s.is_anonymous else f"Patient"
+            bot_me = await context.bot.get_me()
+            await context.bot.send_message(
+                chat_id=doctor.telegram_id,
+                text=(
+                    f"💬 Post-Session Follow-Up (Session #{session_id})\n\n"
+                    f"From: {patient_label}\n\n"
+                    f"{text}"
+                ),
+                reply_markup=InlineKeyboardMarkup([
+                    [InlineKeyboardButton(
+                        "💬 Reply to Patient",
+                        callback_data=f"session_reply:{session_id}",
+                    )],
+                ]),
+            )
+
+        await update.message.reply_text(
+            "✅ Your follow-up message has been sent to the doctor.",
+            reply_markup=back_btn,
+        )
+
+    except Exception as exc:
+        logger.error("Session follow-up error: %s", exc, exc_info=True)
+        await update.message.reply_text("Something went wrong. Please try again.", reply_markup=back_btn)
+
+    context.user_data.pop("session_followup_id", None)
+
+
+async def session_reply_callback(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    """Doctor clicks 'Reply to Patient' for a post-session follow-up."""
+    query = update.callback_query
+    await query.answer()
+    session_id = int(query.data.split(":")[1])
+
+    context.user_data["session_reply_id"] = session_id
+    await query.edit_message_text(
+        "💬 Type your reply to the patient below.\n\n"
+        "Type /cancel to cancel."
+    )
+
+
+async def session_reply_message(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    """Forward doctor's reply to patient for a post-session follow-up."""
+    session_id = context.user_data.get("session_reply_id")
+    if not session_id:
+        return
+
+    text = update.message.text.strip()
+    if text.startswith("/"):
+        context.user_data.pop("session_reply_id", None)
+        return
+
+    try:
+        async with session_factory() as session:
+            s = await session.get(ConsultSession, session_id)
+            if not s:
+                await update.message.reply_text("Session not found.", reply_markup=back_btn)
+                context.user_data.pop("session_reply_id", None)
+                return
+
+            doctor = await session.get(Doctor, s.doctor_id) if s.doctor_id else None
+            patient = await session.get(User, s.user_id)
+
+        doc_name = f"Dr. {doctor.full_name}" if doctor else "Doctor"
+
+        if patient:
+            await context.bot.send_message(
+                chat_id=patient.telegram_id,
+                text=(
+                    f"💬 Follow-Up Reply from {doc_name} (Session #{session_id})\n\n"
+                    f"{text}"
+                ),
+                reply_markup=InlineKeyboardMarkup([
+                    [InlineKeyboardButton(
+                        "💬 Send Another Follow-Up",
+                        callback_data=f"session_followup:{session_id}",
+                    )],
+                    [InlineKeyboardButton("← Back to Menu", callback_data="backtomenu")],
+                ]),
+            )
+
+        await update.message.reply_text(
+            "✅ Reply sent to the patient.",
+            reply_markup=back_btn,
+        )
+
+    except Exception as exc:
+        logger.error("Session reply error: %s", exc, exc_info=True)
+        await update.message.reply_text("Something went wrong.", reply_markup=back_btn)
+
+    context.user_data.pop("session_reply_id", None)
+
+
 # ── Export ────────────────────────────────────────────────────────────────
 
 navigation_handlers = [
@@ -402,4 +554,6 @@ navigation_handlers = [
     CallbackQueryHandler(accept_session_callback, pattern=r"^accept_session:(\d+)$"),
     CallbackQueryHandler(decline_session_callback, pattern=r"^decline_session:(\d+)$"),
     CallbackQueryHandler(back_to_menu_callback, pattern=r"^backtomenu$"),
+    CallbackQueryHandler(session_followup_callback, pattern=r"^session_followup:\d+$"),
+    CallbackQueryHandler(session_reply_callback, pattern=r"^session_reply:\d+$"),
 ]

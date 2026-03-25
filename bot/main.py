@@ -47,15 +47,29 @@ def register_handlers(app: Application) -> None:
     # These must fire before ConversationHandlers which can swallow callbacks.
     from telegram.ext import CallbackQueryHandler
 
-    # Navigation handlers (/menu, /help, /end, accept_session, backtomenu)
+    # Navigation handlers (/menu, /help, /end, accept_session, backtomenu, session_followup, session_reply)
     from bot.handlers.navigation import navigation_handlers
     for handler in navigation_handlers:
         app.add_handler(handler, group=0)
+
+    # Session follow-up message handlers (post-consultation)
+    from bot.handlers.navigation import session_followup_message, session_reply_message
+    from telegram.ext import MessageHandler as MH
+    # These fire at group 0 but only when user_data has the right key (checked inside handler)
 
     # Doctor menu buttons
     from bot.handlers.menu_callbacks import handle_doc_menu, handle_patient_menu
     app.add_handler(CallbackQueryHandler(handle_doc_menu, pattern=r"^doc:"), group=0)
     app.add_handler(CallbackQueryHandler(handle_patient_menu, pattern=r"^menu:(history|settings|browse)$"), group=0)
+
+    # Doctor schedule toggle
+    from bot.handlers.menu_callbacks import handle_schedule_toggle, handle_book_doctor
+    app.add_handler(CallbackQueryHandler(handle_schedule_toggle, pattern=r"^sched:"), group=0)
+    app.add_handler(CallbackQueryHandler(handle_book_doctor, pattern=r"^bookdoc:\d+$"), group=0)
+
+    # Q&A thread view
+    from bot.handlers.qa_answer import view_thread_handler
+    app.add_handler(view_thread_handler, group=0)
 
     # Q&A approve/reject (admin notifications)
     from bot.handlers.public_question import question_approve_handler, question_reject_handler
@@ -83,9 +97,10 @@ def register_handlers(app: Application) -> None:
     app.add_handler(rating_handler, group=0)
 
     # ── Priority 1: Answer + Follow-up ConversationHandlers (deep link entry) ──
-    from bot.handlers.qa_answer import answer_conv_handler, followup_conv_handler
+    from bot.handlers.qa_answer import answer_conv_handler, followup_conv_handler, answer_followup_conv_handler
     app.add_handler(answer_conv_handler, group=1)
     app.add_handler(followup_conv_handler, group=1)
+    app.add_handler(answer_followup_conv_handler, group=1)
 
     # ── Priority 2: Deep link router (/start with payload) ────────────────
     from bot.handlers.deep_link import deep_link_handler
@@ -122,16 +137,27 @@ def register_handlers(app: Application) -> None:
     for handler in admin_handlers:
         app.add_handler(handler, group=9)
 
-    # ── Priority 10: Relay forwarding (catch-all for active relay sessions) ──
-    from bot.handlers.private_session import relay_patient_message, relay_doctor_message
+    # ── Priority 10: Post-session follow-up messages ─────────────────────
+    from bot.handlers.navigation import session_followup_message, session_reply_message
     from telegram.ext import MessageHandler, filters
     app.add_handler(
-        MessageHandler(filters.ChatType.PRIVATE & (filters.TEXT | filters.PHOTO | filters.VOICE | filters.Document.ALL) & ~filters.COMMAND, relay_patient_message),
+        MessageHandler(filters.ChatType.PRIVATE & filters.TEXT & ~filters.COMMAND, session_followup_message),
         group=9,
     )
     app.add_handler(
-        MessageHandler(filters.ChatType.PRIVATE & (filters.TEXT | filters.PHOTO | filters.VOICE | filters.Document.ALL) & ~filters.COMMAND, relay_doctor_message),
+        MessageHandler(filters.ChatType.PRIVATE & filters.TEXT & ~filters.COMMAND, session_reply_message),
         group=10,
+    )
+
+    # ── Priority 11-12: Relay forwarding (catch-all for active relay sessions) ──
+    from bot.handlers.private_session import relay_patient_message, relay_doctor_message
+    app.add_handler(
+        MessageHandler(filters.ChatType.PRIVATE & (filters.TEXT | filters.PHOTO | filters.VOICE | filters.Document.ALL) & ~filters.COMMAND, relay_patient_message),
+        group=11,
+    )
+    app.add_handler(
+        MessageHandler(filters.ChatType.PRIVATE & (filters.TEXT | filters.PHOTO | filters.VOICE | filters.Document.ALL) & ~filters.COMMAND, relay_doctor_message),
+        group=12,
     )
 
     logger.info("All handlers registered.")

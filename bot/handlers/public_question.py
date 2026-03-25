@@ -312,17 +312,15 @@ async def approve_question_cb(update: Update, context: ContextTypes.DEFAULT_TYPE
             await context.bot.send_message(
                 chat_id=author_tid,
                 text=t("qa_approved_notify", lang),
-                reply_markup=InlineKeyboardMarkup([[
-                    InlineKeyboardButton(
-                        "🔄 Ask a Follow-Up",
-                        url=f"https://t.me/{bot_me.username}?start=followup_{question_id}",
-                    ),
-                ]]),
+                reply_markup=InlineKeyboardMarkup([
+                    [InlineKeyboardButton("📋 View Thread", callback_data=f"viewthread:{question_id}")],
+                    [InlineKeyboardButton("🔄 Ask a Follow-Up", callback_data=f"askfollowup:{question_id}")],
+                ]),
             )
         except Exception:
             pass
 
-    # Notify doctors — ONLY doctors get the Answer button (DM only)
+    # Notify doctors — Answer button via deep link (DM only)
     for doc_id in doc_tids:
         try:
             await context.bot.send_message(
@@ -331,12 +329,43 @@ async def approve_question_cb(update: Update, context: ContextTypes.DEFAULT_TYPE
                     f"🔔 New {cat_name.title()} question (#{question_id}):\n\n"
                     f"{q_text[:200]}"
                 ),
-                reply_markup=InlineKeyboardMarkup([[
-                    InlineKeyboardButton("💬 Answer This", url=f"https://t.me/{bot_me.username}?start=answer_{question_id}"),
-                ]]),
+                reply_markup=InlineKeyboardMarkup([
+                    [InlineKeyboardButton("💬 Answer This", url=f"https://t.me/{bot_me.username}?start=answer_{question_id}")],
+                    [InlineKeyboardButton("📋 View Thread", callback_data=f"viewthread:{question_id}")],
+                ]),
             )
         except Exception:
             pass
+
+    # Also notify GENERAL doctors regardless of category
+    if q_category.value != "general":
+        from bot.models.doctor import Specialty as Spec
+        async with session_factory() as session:
+            gen_result = await session.execute(
+                select(Doctor).where(
+                    Doctor.specialty == Spec.GENERAL,
+                    Doctor.is_available.is_(True),
+                    Doctor.is_verified.is_(True),
+                )
+            )
+            gen_docs = gen_result.scalars().all()
+            gen_tids = [d.telegram_id for d in gen_docs if d.telegram_id not in doc_tids]
+
+        for doc_id in gen_tids:
+            try:
+                await context.bot.send_message(
+                    chat_id=doc_id,
+                    text=(
+                        f"🔔 New {cat_name.title()} question (#{question_id}):\n\n"
+                        f"{q_text[:200]}"
+                    ),
+                    reply_markup=InlineKeyboardMarkup([
+                        [InlineKeyboardButton("💬 Answer This", url=f"https://t.me/{bot_me.username}?start=answer_{question_id}")],
+                        [InlineKeyboardButton("📋 View Thread", callback_data=f"viewthread:{question_id}")],
+                    ]),
+                )
+            except Exception:
+                pass
 
     await query.edit_message_text(f"✅ Question #{question_id} approved and posted.")
 # ---------------------------------------------------------------------------

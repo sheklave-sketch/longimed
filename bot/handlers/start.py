@@ -25,7 +25,7 @@ from bot.utils.keyboards import (
 logger = logging.getLogger(__name__)
 
 # States
-LANGUAGE, CONSENT, ROLE, PATIENT_PHONE, DONE = range(5)
+LANGUAGE, CONSENT, ROLE, PATIENT_PHONE, CONFIRM_PHONE, DONE = range(6)
 # Doctor registration states
 DOC_NAME, DOC_LICENSE, DOC_SPECIALTY, DOC_LANGUAGES, DOC_BIO, DOC_PHOTO, DOC_CONFIRM = range(50, 57)
 
@@ -540,11 +540,54 @@ async def handle_phone(update: Update, context: ContextTypes.DEFAULT_TYPE) -> in
         return PATIENT_PHONE
 
     phone = update.message.contact.phone_number
+    context.user_data["pending_phone"] = phone
+
+    from telegram import ReplyKeyboardRemove, InlineKeyboardButton, InlineKeyboardMarkup
+
+    await update.message.reply_text(
+        f"📱 Your phone number: **{phone}**\n\nIs this correct?",
+        reply_markup=ReplyKeyboardRemove(),
+    )
+    await update.message.reply_text(
+        "Please confirm:",
+        reply_markup=InlineKeyboardMarkup([
+            [
+                InlineKeyboardButton("✅ Yes, confirm", callback_data="phone:confirm"),
+                InlineKeyboardButton("🔄 Re-enter", callback_data="phone:reenter"),
+            ]
+        ]),
+    )
+    return CONFIRM_PHONE
+
+
+async def confirm_phone(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
+    query = update.callback_query
+    await query.answer()
+    lang = context.user_data.get("lang", "en")
+
+    if query.data == "phone:reenter":
+        from telegram import KeyboardButton, ReplyKeyboardMarkup
+        await query.edit_message_text("Let's try again.")
+        await context.bot.send_message(
+            chat_id=update.effective_user.id,
+            text=f"{t('phone_request', lang)}",
+            reply_markup=ReplyKeyboardMarkup(
+                [[KeyboardButton(t("btn_share_phone", lang), request_contact=True)]],
+                one_time_keyboard=True,
+                resize_keyboard=True,
+            ),
+        )
+        return PATIENT_PHONE
+
+    # Confirm — save phone
+    phone = context.user_data.pop("pending_phone", None)
+    if not phone:
+        await query.edit_message_text("Something went wrong. Please send /start to try again.")
+        return ConversationHandler.END
 
     from bot.database import session_factory
     from bot.models.user import User
     from sqlalchemy import select
-    from telegram import ReplyKeyboardRemove
 
     async with session_factory() as session:
         result = await session.execute(
@@ -555,12 +598,10 @@ async def handle_phone(update: Update, context: ContextTypes.DEFAULT_TYPE) -> in
             user.phone = phone
             await session.commit()
 
-    await update.message.reply_text(
-        t("patient_ready", lang),
-        reply_markup=ReplyKeyboardRemove(),
-    )
-    await update.message.reply_text(
-        "Here's your menu:",
+    await query.edit_message_text(f"✅ Phone confirmed: {phone}")
+    await context.bot.send_message(
+        chat_id=update.effective_user.id,
+        text=t("patient_ready", lang),
         reply_markup=main_menu_keyboard(lang),
     )
 
@@ -586,6 +627,7 @@ start_conv_handler = ConversationHandler(
         CONSENT: [CallbackQueryHandler(handle_consent, pattern=r"^consent:")],
         ROLE: [CallbackQueryHandler(handle_role, pattern=r"^role:")],
         PATIENT_PHONE: [MessageHandler(filters.CONTACT, handle_phone)],
+        CONFIRM_PHONE: [CallbackQueryHandler(confirm_phone, pattern=r"^phone:(confirm|reenter)$")],
         # Doctor registration
         DOC_NAME: [MessageHandler(filters.TEXT & ~filters.COMMAND, doc_receive_name)],
         DOC_LICENSE: [MessageHandler(filters.TEXT & ~filters.COMMAND, doc_receive_license)],

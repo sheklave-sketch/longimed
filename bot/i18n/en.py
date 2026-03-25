@@ -213,6 +213,21 @@ STRINGS: dict[str, str] = {
     "btn_lang_amharic": "🇪🇹 Amharic",
     "btn_lang_both": "Both",
 
+    # ── Phone confirmation ────────────────────────────────────────────
+    "phone_confirm_prompt": "📱 Your phone number: {phone}\n\nIs this correct?",
+    "phone_confirmed": "✅ Phone confirmed!",
+    "phone_reenter": "Let's try again. Please share your phone number.",
+
+    # ── Schedule ─────────────────────────────────────────────────────
+    "schedule_title": "📅 Your Availability Schedule",
+    "schedule_instructions": "Tap a slot to toggle it on/off:",
+
+    # ── Session follow-up ────────────────────────────────────────────
+    "session_followup_prompt": "💬 Type your follow-up message below.\nThis will be sent to the doctor who treated you.",
+    "session_followup_sent": "✅ Your follow-up message has been sent to the doctor.",
+    "session_reply_prompt": "💬 Type your reply to the patient below.",
+    "session_reply_sent": "✅ Reply sent to the patient.",
+
     # ── Navigation ──────────────────────────────────────────────────────
     "nav_back_menu": "← Back to Menu",
     "nav_no_active_session": "No active session found. Use /menu to return to your menu.",
