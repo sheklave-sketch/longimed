@@ -27,6 +27,8 @@ export default function Header() {
 
   const tabs = [
     { href: "/", label: "Doctors", show: true },
+    { href: "/qa", label: "Q&A", show: true },
+    { href: "/book", label: "Book", show: !role.is_doctor },
     { href: "/dashboard", label: "Dashboard", show: role.is_doctor },
     { href: "/admin", label: "Admin", show: role.is_admin },
   ].filter((t) => t.show);
