@@ -10,6 +10,7 @@ def main_menu_keyboard(lang: str) -> InlineKeyboardMarkup:
         [InlineKeyboardButton(t("btn_ask_question", lang), callback_data="menu:ask")],
         [InlineKeyboardButton(t("btn_private_consult", lang), callback_data="menu:consult")],
         [InlineKeyboardButton(t("btn_browse_doctors", lang), callback_data="menu:browse")],
+        [InlineKeyboardButton(t("btn_call_doctor", lang), callback_data="menu:call")],
         [InlineKeyboardButton(t("btn_my_history", lang), callback_data="menu:history")],
         [InlineKeyboardButton(t("btn_settings", lang), callback_data="menu:settings")],
     ])

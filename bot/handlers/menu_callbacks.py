@@ -233,6 +233,9 @@ async def handle_patient_menu(update: Update, context: ContextTypes.DEFAULT_TYPE
         if action == "browse":
             await _browse_doctors(query, lang)
             return
+        if action == "call":
+            await _call_doctor(query, lang)
+            return
         await _patient_menu_inner(query, action, lang, update.effective_user.id)
     except Exception as exc:
         logger.error("Patient menu error (%s): %s", action, exc, exc_info=True)
@@ -288,6 +291,55 @@ async def _browse_doctors(query, lang: str) -> None:
 
     buttons.append([InlineKeyboardButton("\u2190 Back to Menu", callback_data="backtomenu")])
     await query.edit_message_text("\n".join(lines), reply_markup=InlineKeyboardMarkup(buttons))
+
+
+async def _call_doctor(query, lang: str) -> None:
+    """Show available doctors with clickable phone number buttons."""
+    from bot.models.doctor import Doctor
+    from bot.models.user import User
+    from sqlalchemy import select
+
+    async with session_factory() as session:
+        result = await session.execute(
+            select(Doctor, User.phone).join(
+                User, Doctor.telegram_id == User.telegram_id
+            ).where(
+                Doctor.is_verified.is_(True),
+                Doctor.is_available.is_(True),
+                User.phone.isnot(None),
+            ).order_by(Doctor.rating_avg.desc())
+        )
+        rows = result.all()
+
+    back_btn = InlineKeyboardMarkup([[InlineKeyboardButton("\u2190 Back to Menu", callback_data="backtomenu")]])
+
+    if not rows:
+        await query.edit_message_text(
+            t("call_no_doctors", lang),
+            reply_markup=back_btn,
+        )
+        return
+
+    lines = [t("call_header", lang), ""]
+    buttons = []
+
+    for doctor, phone in rows:
+        spec = doctor.specialty.value if hasattr(doctor.specialty, 'value') else doctor.specialty
+        rating = f"⭐ {round(doctor.rating_avg, 1)}/5" if doctor.rating_count else "New"
+        lines.append(f"👨‍⚕️ Dr. {doctor.full_name} — {spec.title()} ({rating})")
+        lines.append(f"   📞 {phone}\n")
+
+        # Telegram URL button that opens the phone dialer
+        buttons.append([InlineKeyboardButton(
+            f"📞 Call Dr. {doctor.full_name}",
+            url=f"tel:{phone}",
+        )])
+
+    buttons.append([InlineKeyboardButton("\u2190 Back to Menu", callback_data="backtomenu")])
+    await query.edit_message_text(
+        "\n".join(lines),
+        reply_markup=InlineKeyboardMarkup(buttons),
+    )
 
 
 async def handle_book_doctor(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
