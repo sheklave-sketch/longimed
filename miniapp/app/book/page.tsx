@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, Suspense } from "react";
 import { motion } from "framer-motion";
 import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
@@ -17,7 +17,15 @@ const SPECIALTIES = [
   { value: "cardiology", label: "Cardiology", icon: "❤️" },
 ];
 
-export default function BookConsultation() {
+export default function BookPage() {
+  return (
+    <Suspense fallback={<div className="p-8 text-center">Loading...</div>}>
+      <BookConsultation />
+    </Suspense>
+  );
+}
+
+function BookConsultation() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const preselectedDoctor = searchParams.get("doctor");
