@@ -40,7 +40,10 @@ export default function DoctorDashboard() {
     </div>
   );
 
-  if (!data?.doctor) return <EmptyState icon="🔒" title="Doctor Access Only" subtitle="This dashboard is for verified LongiMed doctors." />;
+  if (!data?.doctor) {
+    if (typeof window !== "undefined") window.location.href = "/";
+    return null;
+  }
 
   const { doctor, stats, recent_sessions } = data;
   const specLabel = doctor.specialty.replace("_", " ").replace(/\b\w/g, (c: string) => c.toUpperCase());

@@ -36,6 +36,32 @@ async def health():
     return {"status": "ok"}
 
 
+# ── User role check ───────────────────────────────────────────────────────────
+
+@app.get("/api/user/role/{telegram_id}")
+async def get_user_role(telegram_id: int):
+    from bot.database import session_factory
+    from bot.models.doctor import Doctor
+    from sqlalchemy import select
+
+    is_admin = telegram_id in settings.admin_chat_ids
+    is_doctor = False
+
+    try:
+        async with session_factory() as session:
+            result = await session.execute(
+                select(Doctor).where(
+                    Doctor.telegram_id == telegram_id,
+                    Doctor.is_verified.is_(True),
+                )
+            )
+            is_doctor = result.scalar_one_or_none() is not None
+    except Exception:
+        pass
+
+    return {"is_doctor": is_doctor, "is_admin": is_admin}
+
+
 # ── Mini App: Doctor directory ───────────────────────────────────────────────
 
 @app.get("/api/doctors")

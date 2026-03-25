@@ -42,7 +42,10 @@ export default function AdminPanel() {
     </div>
   );
 
-  if (!data) return <EmptyState icon="🔒" title="Admin Access Only" subtitle="You don't have permission to view this page." />;
+  if (!data) {
+    if (typeof window !== "undefined") window.location.href = "/";
+    return null;
+  }
 
   const { stats, pending_doctors, recent_payments } = data;
 
