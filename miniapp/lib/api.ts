@@ -160,3 +160,16 @@ export async function registerDoctor(data: {
 }): Promise<{ message: string }> {
   return apiPost("/api/doctors/register", data);
 }
+
+export async function adminRegisterDoctor(data: {
+  admin_telegram_id: number;
+  full_name: string;
+  license_number: string;
+  specialty: string;
+  languages: string[];
+  bio: string;
+  doctor_telegram_id?: number;
+  phone?: string;
+}): Promise<{ id: number; status: string; is_verified: boolean }> {
+  return apiPost("/api/admin/doctors/register", data);
+}

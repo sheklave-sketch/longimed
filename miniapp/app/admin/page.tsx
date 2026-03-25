@@ -3,8 +3,18 @@
 import { useState, useEffect } from "react";
 import { motion } from "framer-motion";
 import StatCard from "@/components/StatCard";
-import EmptyState from "@/components/EmptyState";
 import { initTelegram, getTelegramUser } from "@/lib/telegram";
+import { adminRegisterDoctor } from "@/lib/api";
+
+const SPECIALTIES = [
+  { value: "general", label: "General Medicine", icon: "🩺" },
+  { value: "pediatrics", label: "Pediatrics", icon: "👶" },
+  { value: "obgyn", label: "OB/GYN", icon: "🤰" },
+  { value: "dermatology", label: "Dermatology", icon: "🧴" },
+  { value: "mental_health", label: "Mental Health", icon: "🧠" },
+  { value: "cardiology", label: "Cardiology", icon: "❤️" },
+  { value: "other", label: "Other", icon: "➕" },
+];
 
 interface AdminData {
   stats: { total_users: number; total_doctors: number; total_questions: number; total_sessions: number; pending_doctors: number; pending_questions: number };
@@ -16,10 +26,25 @@ export default function AdminPanel() {
   const [data, setData] = useState<AdminData | null>(null);
   const [loading, setLoading] = useState(true);
   const [actionLoading, setActionLoading] = useState<number | null>(null);
+  const [showAddForm, setShowAddForm] = useState(false);
+  const [adminTgId, setAdminTgId] = useState(0);
+
+  // Add doctor form state
+  const [docName, setDocName] = useState("");
+  const [docLicense, setDocLicense] = useState("");
+  const [docSpecialty, setDocSpecialty] = useState("");
+  const [docLangs, setDocLangs] = useState<string[]>(["en"]);
+  const [docBio, setDocBio] = useState("");
+  const [docTgId, setDocTgId] = useState("");
+  const [docPhone, setDocPhone] = useState("");
+  const [addLoading, setAddLoading] = useState(false);
+  const [addSuccess, setAddSuccess] = useState(false);
+  const [addError, setAddError] = useState("");
 
   useEffect(() => {
     initTelegram();
     const tgId = getTelegramUser()?.id || 0;
+    setAdminTgId(tgId);
     fetch(`/api/admin/dashboard/${tgId}`)
       .then((r) => { if (!r.ok) throw new Error(); return r.json(); })
       .then(setData).catch(() => setData(null)).finally(() => setLoading(false));
@@ -34,6 +59,47 @@ export default function AdminPanel() {
         stats: { ...p.stats, pending_doctors: p.stats.pending_doctors - 1, total_doctors: action === "approve" ? p.stats.total_doctors + 1 : p.stats.total_doctors },
       } : null);
     } catch {} finally { setActionLoading(null); }
+  };
+
+  const handleAddDoctor = async () => {
+    if (!docName.trim() || !docLicense.trim() || !docSpecialty) {
+      setAddError("Name, license number, and specialty are required.");
+      return;
+    }
+    setAddLoading(true);
+    setAddError("");
+    try {
+      await adminRegisterDoctor({
+        admin_telegram_id: adminTgId,
+        full_name: docName.trim(),
+        license_number: docLicense.trim(),
+        specialty: docSpecialty,
+        languages: docLangs,
+        bio: docBio.trim(),
+        doctor_telegram_id: docTgId ? parseInt(docTgId) : undefined,
+        phone: docPhone || undefined,
+      });
+      setAddSuccess(true);
+      // Update stats
+      if (data) {
+        setData({ ...data, stats: { ...data.stats, total_doctors: data.stats.total_doctors + 1 } });
+      }
+      // Reset form after 2s
+      setTimeout(() => {
+        setShowAddForm(false);
+        setAddSuccess(false);
+        setDocName(""); setDocLicense(""); setDocSpecialty(""); setDocLangs(["en"]); setDocBio(""); setDocTgId(""); setDocPhone("");
+      }, 2000);
+    } catch (err: unknown) {
+      const msg = err instanceof Error ? err.message : "Failed to register doctor";
+      setAddError(msg.includes("409") ? "License or Telegram ID already registered." : msg);
+    } finally {
+      setAddLoading(false);
+    }
+  };
+
+  const toggleLang = (lang: string) => {
+    setDocLangs((prev) => prev.includes(lang) ? prev.filter((l) => l !== lang) : [...prev, lang]);
   };
 
   if (loading) return (
@@ -77,6 +143,103 @@ export default function AdminPanel() {
             )}
             {stats.pending_questions > 0 && (
               <p className="text-[12px] text-ink-body"><span className="font-bold text-brand-gold">{stats.pending_questions}</span> question{stats.pending_questions > 1 ? "s" : ""} awaiting review</p>
+            )}
+          </div>
+        </motion.div>
+      )}
+
+      {/* Add Doctor Button */}
+      <motion.div initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.22 }} className="mb-5">
+        <button
+          onClick={() => setShowAddForm(!showAddForm)}
+          className="w-full py-3 rounded-2xl bg-brand-teal text-white font-display font-bold text-[14px] hover:bg-brand-teal-deep transition-colors shadow-glow"
+        >
+          {showAddForm ? "✕ Close Form" : "➕ Register New Doctor"}
+        </button>
+      </motion.div>
+
+      {/* Add Doctor Form */}
+      {showAddForm && (
+        <motion.div initial={{ opacity: 0, height: 0 }} animate={{ opacity: 1, height: "auto" }} className="mb-6">
+          <div className="card p-5 space-y-4">
+            <h2 className="font-display font-semibold text-ink-rich text-[15px]">Register Doctor (Auto-Verified)</h2>
+
+            {addSuccess ? (
+              <div className="py-6 text-center">
+                <div className="text-3xl mb-2">✅</div>
+                <p className="font-display font-semibold text-ink-rich text-[14px]">Doctor registered successfully!</p>
+              </div>
+            ) : (
+              <>
+                <div>
+                  <label className="text-[11px] font-semibold text-ink-muted uppercase tracking-[0.08em] mb-1.5 block">Full Name *</label>
+                  <input type="text" value={docName} onChange={(e) => setDocName(e.target.value)} placeholder="Dr. Full Name"
+                    className="w-full bg-surface-white border border-surface-border rounded-xl px-3.5 py-2.5 text-[13px] text-ink-rich placeholder:text-ink-faint focus:outline-none focus:border-brand-teal transition-all" />
+                </div>
+
+                <div>
+                  <label className="text-[11px] font-semibold text-ink-muted uppercase tracking-[0.08em] mb-1.5 block">License Number *</label>
+                  <input type="text" value={docLicense} onChange={(e) => setDocLicense(e.target.value)} placeholder="FMHACA-12345"
+                    className="w-full bg-surface-white border border-surface-border rounded-xl px-3.5 py-2.5 text-[13px] text-ink-rich placeholder:text-ink-faint focus:outline-none focus:border-brand-teal transition-all" />
+                </div>
+
+                <div>
+                  <label className="text-[11px] font-semibold text-ink-muted uppercase tracking-[0.08em] mb-1.5 block">Specialty *</label>
+                  <div className="grid grid-cols-2 gap-1.5">
+                    {SPECIALTIES.map((spec) => (
+                      <button key={spec.value} onClick={() => setDocSpecialty(spec.value)}
+                        className={`py-2 px-3 rounded-xl text-[12px] font-semibold text-left transition-all ${
+                          docSpecialty === spec.value ? "bg-brand-teal text-white" : "bg-surface-muted text-ink-body hover:bg-surface-border"
+                        }`}
+                      >{spec.icon} {spec.label}</button>
+                    ))}
+                  </div>
+                </div>
+
+                <div>
+                  <label className="text-[11px] font-semibold text-ink-muted uppercase tracking-[0.08em] mb-1.5 block">Languages</label>
+                  <div className="flex gap-2">
+                    {[{ v: "en", l: "English" }, { v: "am", l: "Amharic" }].map(({ v, l }) => (
+                      <button key={v} onClick={() => toggleLang(v)}
+                        className={`flex-1 py-2 rounded-xl text-[12px] font-semibold transition-all ${
+                          docLangs.includes(v) ? "bg-brand-teal text-white" : "bg-surface-muted text-ink-body"
+                        }`}
+                      >{l}</button>
+                    ))}
+                  </div>
+                </div>
+
+                <div>
+                  <label className="text-[11px] font-semibold text-ink-muted uppercase tracking-[0.08em] mb-1.5 block">Bio</label>
+                  <textarea value={docBio} onChange={(e) => setDocBio(e.target.value)} placeholder="Brief bio..." rows={2}
+                    className="w-full bg-surface-white border border-surface-border rounded-xl px-3.5 py-2.5 text-[13px] text-ink-rich placeholder:text-ink-faint focus:outline-none focus:border-brand-teal transition-all resize-none" />
+                </div>
+
+                <div className="pt-2 border-t border-surface-border">
+                  <p className="text-[11px] font-semibold text-ink-muted uppercase tracking-[0.08em] mb-2">Optional — Telegram & Phone</p>
+                  <div className="space-y-3">
+                    <div>
+                      <label className="text-[11px] text-ink-secondary mb-1 block">Doctor&apos;s Telegram ID</label>
+                      <input type="text" value={docTgId} onChange={(e) => setDocTgId(e.target.value)} placeholder="e.g., 348870668"
+                        className="w-full bg-surface-white border border-surface-border rounded-xl px-3.5 py-2.5 text-[13px] text-ink-rich placeholder:text-ink-faint focus:outline-none focus:border-brand-teal transition-all" />
+                      <p className="text-[10px] text-ink-muted mt-1">If provided, the doctor will be notified on Telegram</p>
+                    </div>
+                    <div>
+                      <label className="text-[11px] text-ink-secondary mb-1 block">Phone Number</label>
+                      <input type="text" value={docPhone} onChange={(e) => setDocPhone(e.target.value)} placeholder="+251..."
+                        className="w-full bg-surface-white border border-surface-border rounded-xl px-3.5 py-2.5 text-[13px] text-ink-rich placeholder:text-ink-faint focus:outline-none focus:border-brand-teal transition-all" />
+                    </div>
+                  </div>
+                </div>
+
+                {addError && (
+                  <p className="text-[12px] text-red-500 font-semibold">{addError}</p>
+                )}
+
+                <button onClick={handleAddDoctor} disabled={addLoading || !docName.trim() || !docLicense.trim() || !docSpecialty}
+                  className="w-full py-3 rounded-xl bg-brand-teal text-white font-display font-bold text-[14px] hover:bg-brand-teal-deep transition-colors disabled:opacity-50"
+                >{addLoading ? "Registering..." : "Register & Verify Doctor"}</button>
+              </>
             )}
           </div>
         </motion.div>

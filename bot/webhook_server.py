@@ -756,6 +756,107 @@ async def search_doctors(q: str = ""):
     ]
 
 
+# ── POST /api/admin/doctors/register — Admin registers a doctor (auto-verified) ──
+
+@app.post("/api/admin/doctors/register")
+async def admin_register_doctor(request: Request):
+    """Admin registers a doctor directly — auto-verified, no approval needed."""
+    from bot.database import session_factory
+    from bot.models.doctor import Doctor, Specialty, RegistrationStatus
+    from bot.models.user import User
+    from sqlalchemy import select
+    from datetime import datetime, timezone
+
+    body = await request.json()
+    admin_telegram_id = body.get("admin_telegram_id")
+
+    # Verify caller is admin
+    if admin_telegram_id not in settings.admin_ids:
+        raise HTTPException(status_code=403, detail="Not authorized")
+
+    full_name = body.get("full_name")
+    license_number = body.get("license_number")
+    specialty = body.get("specialty")
+    languages = body.get("languages", ["en"])
+    bio = body.get("bio", "")
+    doctor_telegram_id = body.get("doctor_telegram_id")
+    phone = body.get("phone")
+
+    if not full_name or not license_number or not specialty:
+        raise HTTPException(status_code=400, detail="full_name, license_number, and specialty are required")
+
+    try:
+        spec_enum = Specialty(specialty)
+    except ValueError:
+        raise HTTPException(status_code=400, detail=f"Invalid specialty: {specialty}")
+
+    try:
+        async with session_factory() as session:
+            # Check license uniqueness
+            existing = (await session.execute(
+                select(Doctor).where(Doctor.license_number == license_number)
+            )).scalar_one_or_none()
+            if existing:
+                raise HTTPException(status_code=409, detail="License number already registered")
+
+            # If telegram_id provided, check uniqueness
+            if doctor_telegram_id:
+                existing_tg = (await session.execute(
+                    select(Doctor).where(Doctor.telegram_id == doctor_telegram_id)
+                )).scalar_one_or_none()
+                if existing_tg:
+                    raise HTTPException(status_code=409, detail="Telegram account already registered as doctor")
+
+                # Ensure user record exists (create if not)
+                user_result = (await session.execute(
+                    select(User).where(User.telegram_id == doctor_telegram_id)
+                )).scalar_one_or_none()
+                if not user_result:
+                    user = User(
+                        telegram_id=doctor_telegram_id,
+                        phone=phone,
+                        language="en",
+                        consent_given=True,
+                        consent_timestamp=datetime.now(timezone.utc),
+                    )
+                    session.add(user)
+                elif phone and not user_result.phone:
+                    user_result.phone = phone
+
+            doctor = Doctor(
+                telegram_id=doctor_telegram_id or 0,
+                full_name=full_name,
+                license_number=license_number,
+                specialty=spec_enum,
+                languages=languages if isinstance(languages, list) else [languages],
+                bio=bio,
+                is_verified=True,
+                is_available=True,
+                registration_status=RegistrationStatus.APPROVED,
+                applied_at=datetime.now(timezone.utc),
+            )
+            session.add(doctor)
+            await session.commit()
+            await session.refresh(doctor)
+            doc_id = doctor.id
+    except HTTPException:
+        raise
+    except Exception:
+        logger.exception("Admin doctor registration failed")
+        raise HTTPException(status_code=500, detail="Internal server error")
+
+    # Notify doctor on Telegram if they have a telegram_id
+    if doctor_telegram_id:
+        await _tg_notify(
+            doctor_telegram_id,
+            f"🎉 Welcome to LongiMed, Dr. {full_name}!\n\n"
+            f"You have been registered and verified as a LongiMed doctor.\n"
+            f"Send /start to the bot to access your doctor menu.",
+        )
+
+    return {"id": doc_id, "status": "approved", "is_verified": True}
+
+
 # ── POST /api/doctors/register — Doctor self-registration ────────────────
 
 @app.post("/api/doctors/register")
