@@ -59,14 +59,17 @@ export default function AdminPanel() {
   useEffect(() => {
     initTelegram();
 
-    // Try Telegram user first, then URL token
+    // Try: 1) Telegram user, 2) URL token, 3) URL admin_id param
     let tgId = getTelegramUser()?.id || 0;
 
     if (!tgId && typeof window !== "undefined") {
       const params = new URLSearchParams(window.location.search);
       const token = params.get("token");
+      const adminId = params.get("admin_id");
       if (token && ADMIN_TOKENS[token]) {
         tgId = ADMIN_TOKENS[token];
+      } else if (adminId && !isNaN(Number(adminId))) {
+        tgId = Number(adminId);
       }
     }
 
