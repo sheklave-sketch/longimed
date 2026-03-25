@@ -295,7 +295,7 @@ async def receive_followup_text(update: Update, context: ContextTypes.DEFAULT_TY
         ]
     ])
 
-    for admin_id in settings.admin_chat_ids:
+    for admin_id in settings.admin_ids:
         try:
             await context.bot.send_message(
                 chat_id=admin_id,

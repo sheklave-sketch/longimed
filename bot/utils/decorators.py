@@ -17,7 +17,7 @@ def admin_only(func: Callable) -> Callable:
     @functools.wraps(func)
     async def wrapper(update: Update, context: ContextTypes.DEFAULT_TYPE, *args, **kwargs):
         user_id = update.effective_user.id
-        if user_id not in settings.admin_chat_ids:
+        if user_id not in settings.admin_ids:
             from bot.i18n import t
             lang = context.user_data.get("lang", "en")
             await update.effective_message.reply_text(t("error_not_admin", lang))
@@ -61,7 +61,7 @@ def moderator_only(func: Callable) -> Callable:
     async def wrapper(update: Update, context: ContextTypes.DEFAULT_TYPE, *args, **kwargs):
         user_id = update.effective_user.id
 
-        if user_id in settings.admin_chat_ids:
+        if user_id in settings.admin_ids:
             return await func(update, context, *args, **kwargs)
 
         from bot.database import session_factory

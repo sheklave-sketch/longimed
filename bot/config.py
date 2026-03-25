@@ -12,7 +12,7 @@ class Settings(BaseSettings):
 
     # Telegram
     telegram_bot_token: str
-    admin_chat_ids: List[int] = []
+    admin_chat_ids: str = ""
     public_channel_id: int = 0
     discussion_group_id: int = 0
     miniapp_url: str = "https://longimed.vercel.app"
@@ -45,16 +45,12 @@ class Settings(BaseSettings):
     environment: str = "development"
     log_level: str = "INFO"
 
-    @field_validator("admin_chat_ids", mode="before")
-    @classmethod
-    def parse_admin_ids(cls, v: object) -> List[int]:
-        if isinstance(v, str):
-            return [int(x.strip()) for x in v.split(",") if x.strip()]
-        if isinstance(v, int):
-            return [v]
-        if isinstance(v, list):
-            return [int(x) for x in v]
-        return []
+    @property
+    def admin_ids(self) -> list[int]:
+        """Parse admin IDs from comma-separated string."""
+        if not self.admin_chat_ids:
+            return []
+        return [int(x.strip()) for x in self.admin_chat_ids.split(",") if x.strip()]
 
     @property
     def is_production(self) -> bool:

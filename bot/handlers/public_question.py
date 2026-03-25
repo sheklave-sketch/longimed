@@ -171,7 +171,7 @@ async def confirm_question(update: Update, context: ContextTypes.DEFAULT_TYPE) -
         await session.commit()
 
     # Notify admins + moderators
-    notify_ids = list(set(settings.admin_chat_ids + mod_telegram_ids))
+    notify_ids = list(set(settings.admin_ids + mod_telegram_ids))
     notification_text = (
         f"📋 *New Question Pending Review* (#{question_id})\n\n"
         f"Category: {category}\n"

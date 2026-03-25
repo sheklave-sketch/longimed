@@ -44,7 +44,7 @@ async def get_user_role(telegram_id: int):
     from bot.models.doctor import Doctor
     from sqlalchemy import select
 
-    is_admin = telegram_id in settings.admin_chat_ids
+    is_admin = telegram_id in settings.admin_ids
     is_doctor = False
 
     try:
@@ -251,7 +251,7 @@ async def toggle_availability(telegram_id: int):
 
 @app.get("/api/admin/dashboard/{telegram_id}")
 async def admin_dashboard(telegram_id: int):
-    if telegram_id not in settings.admin_chat_ids:
+    if telegram_id not in settings.admin_ids:
         raise HTTPException(status_code=403, detail="Forbidden")
     from bot.database import session_factory
     from bot.models.user import User

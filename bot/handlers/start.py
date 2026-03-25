@@ -393,7 +393,7 @@ async def doc_confirm_submit(update: Update, context: ContextTypes.DEFAULT_TYPE)
         [InlineKeyboardButton("📄 View License", callback_data=f"docmod:license:{doctor_id}")],
     ])
 
-    for admin_id in settings.admin_chat_ids:
+    for admin_id in settings.admin_ids:
         try:
             await context.bot.send_message(
                 chat_id=admin_id,
@@ -419,7 +419,7 @@ async def approve_doctor_cb(update: Update, context: ContextTypes.DEFAULT_TYPE) 
     await query.answer()
 
     from bot.config import settings
-    if update.effective_user.id not in settings.admin_chat_ids:
+    if update.effective_user.id not in settings.admin_ids:
         return
 
     doctor_id = int(query.data.split(":")[2])
@@ -461,7 +461,7 @@ async def reject_doctor_cb(update: Update, context: ContextTypes.DEFAULT_TYPE) -
     await query.answer()
 
     from bot.config import settings
-    if update.effective_user.id not in settings.admin_chat_ids:
+    if update.effective_user.id not in settings.admin_ids:
         return
 
     doctor_id = int(query.data.split(":")[2])
@@ -499,7 +499,7 @@ async def view_doctor_license_cb(update: Update, context: ContextTypes.DEFAULT_T
     await query.answer()
 
     from bot.config import settings
-    if update.effective_user.id not in settings.admin_chat_ids:
+    if update.effective_user.id not in settings.admin_ids:
         return
 
     doctor_id = int(query.data.split(":")[2])

@@ -634,7 +634,7 @@ async def _check_doctor_response(context: ContextTypes.DEFAULT_TYPE) -> None:
                     pass
 
             from bot.config import settings
-            for admin_id in settings.admin_chat_ids:
+            for admin_id in settings.admin_ids:
                 try:
                     await context.bot.send_message(
                         chat_id=admin_id,
@@ -657,7 +657,7 @@ async def _notify_admin_pending_payment(context, session_id: int, telegram_id: i
         ),
     ]])
 
-    for admin_id in settings.admin_chat_ids:
+    for admin_id in settings.admin_ids:
         try:
             await context.bot.send_message(
                 chat_id=admin_id,
@@ -679,7 +679,7 @@ async def handle_confirm_payment(update: Update, context: ContextTypes.DEFAULT_T
 
     # Check admin
     from bot.config import settings
-    if update.effective_user.id not in settings.admin_chat_ids:
+    if update.effective_user.id not in settings.admin_ids:
         return
 
     parts = query.data.split(":")  # confirmpay:<tg_id>:<amount>
@@ -747,7 +747,7 @@ async def handle_reject_payment(update: Update, context: ContextTypes.DEFAULT_TY
     await query.answer()
 
     from bot.config import settings
-    if update.effective_user.id not in settings.admin_chat_ids:
+    if update.effective_user.id not in settings.admin_ids:
         return
 
     parts = query.data.split(":")
