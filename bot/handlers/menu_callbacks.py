@@ -397,6 +397,52 @@ async def _patient_menu_inner(query, action: str, lang: str, telegram_id: int) -
     elif action == "settings":
         from bot.utils.keyboards import language_keyboard
         await query.edit_message_text(
-            "Settings\n\nChange your language:",
+            "⚙️ Settings\n\nChange your language:",
             reply_markup=language_keyboard(),
         )
+
+
+async def handle_language_change(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    """Handle language selection from Settings or initial onboarding (standalone fallback)."""
+    query = update.callback_query
+    await query.answer()
+
+    lang = query.data.split(":")[1]  # "lang:en" or "lang:am"
+    context.user_data["lang"] = lang
+
+    # Check if user exists — if so, update language in DB
+    from bot.models.user import User
+    from sqlalchemy import select
+
+    async with session_factory() as session:
+        result = await session.execute(
+            select(User).where(User.telegram_id == update.effective_user.id)
+        )
+        user = result.scalar_one_or_none()
+
+        if user:
+            # Existing user — this is a language change from Settings
+            user.language = lang
+            await session.commit()
+
+            from bot.i18n import t
+            from bot.utils.keyboards import main_menu_keyboard
+            lang_name = "English 🇬🇧" if lang == "en" else "አማርኛ 🇪🇹"
+            await query.edit_message_text(
+                f"✅ Language changed to {lang_name}",
+            )
+            await context.bot.send_message(
+                chat_id=update.effective_user.id,
+                text=t("patient_ready", lang),
+                reply_markup=main_menu_keyboard(lang),
+            )
+        else:
+            # New user — they're in onboarding, show disclaimer
+            from bot.i18n import t
+            from bot.utils.keyboards import consent_keyboard
+            await query.edit_message_text(
+                f"{t('disclaimer_title', lang)}\n\n{t('disclaimer_body', lang)}",
+                reply_markup=consent_keyboard(lang),
+            )
+
+

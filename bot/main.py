@@ -62,6 +62,10 @@ def register_handlers(app: Application) -> None:
     app.add_handler(CallbackQueryHandler(handle_doc_menu, pattern=r"^doc:"), group=0)
     app.add_handler(CallbackQueryHandler(handle_patient_menu, pattern=r"^menu:(history|settings|browse|call)$"), group=0)
 
+    # Language change (from Settings or onboarding fallback)
+    from bot.handlers.menu_callbacks import handle_language_change
+    app.add_handler(CallbackQueryHandler(handle_language_change, pattern=r"^lang:"), group=0)
+
     # Doctor schedule toggle
     from bot.handlers.menu_callbacks import handle_schedule_toggle, handle_book_doctor
     app.add_handler(CallbackQueryHandler(handle_schedule_toggle, pattern=r"^sched:"), group=0)
