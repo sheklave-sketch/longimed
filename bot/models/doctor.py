@@ -52,6 +52,7 @@ class Doctor(Base):
     sex: Mapped[Sex | None] = mapped_column(Enum(Sex, values_callable=lambda e: [x.value for x in e]), nullable=True)
     sub_specialization: Mapped[str | None] = mapped_column(String(200), nullable=True)
     profile_photo_file_id: Mapped[str | None] = mapped_column(String(200), nullable=True)
+    signup_token: Mapped[str | None] = mapped_column(String(32), unique=True, nullable=True, index=True)
     is_verified: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
     is_available: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
     registration_status: Mapped[RegistrationStatus] = mapped_column(

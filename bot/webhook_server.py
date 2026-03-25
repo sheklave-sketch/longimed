@@ -867,6 +867,11 @@ async def admin_register_doctor(request: Request):
                 elif phone and not user_result.phone:
                     user_result.phone = phone
 
+            # Generate signup token for Telegram linking (if no TG ID provided)
+            signup_token = None
+            if not doctor_telegram_id:
+                signup_token = uuid.uuid4().hex[:16]
+
             doctor = Doctor(
                 telegram_id=doctor_telegram_id or 0,
                 full_name=full_name,
@@ -878,6 +883,7 @@ async def admin_register_doctor(request: Request):
                 sub_specialization=sub_specialization,
                 profile_photo_file_id=profile_photo_url,
                 license_document_file_id=license_document_url,
+                signup_token=signup_token,
                 is_verified=True,
                 is_available=True,
                 registration_status=RegistrationStatus.APPROVED,
@@ -902,7 +908,17 @@ async def admin_register_doctor(request: Request):
             f"Send /start to the bot to access your doctor menu.",
         )
 
-    return {"id": doc_id, "status": "approved", "is_verified": True}
+    # Build signup link for the doctor to connect their Telegram
+    signup_link = None
+    if signup_token:
+        signup_link = f"https://t.me/longimed_bot?start=signup_{signup_token}"
+
+    return {
+        "id": doc_id,
+        "status": "approved",
+        "is_verified": True,
+        "signup_link": signup_link,
+    }
 
 
 # ── POST /api/doctors/register — Doctor self-registration ────────────────

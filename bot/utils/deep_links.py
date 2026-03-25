@@ -14,6 +14,7 @@ class DeepLinkType(str, Enum):
     DOCTOR_PROFILE = "doctor_profile"
     WAITLIST_ACCEPT = "waitlist_accept"
     REPORT = "report"
+    DOCTOR_SIGNUP = "doctor_signup"
 
 
 @dataclass
@@ -44,6 +45,9 @@ def parse_payload(payload: str | None) -> DeepLink | None:
             return DeepLink(DeepLinkType.DOCTOR_PROFILE, {"doctor_id": int(parts[-1])})
         if payload.startswith("waitlist_accept_"):
             return DeepLink(DeepLinkType.WAITLIST_ACCEPT, {"session_id": int(parts[-1])})
+        if payload.startswith("signup_"):
+            token = payload[7:]  # everything after "signup_"
+            return DeepLink(DeepLinkType.DOCTOR_SIGNUP, {"token": token})
         if payload.startswith("report_"):
             return DeepLink(DeepLinkType.REPORT, {
                 "target_type": parts[1],

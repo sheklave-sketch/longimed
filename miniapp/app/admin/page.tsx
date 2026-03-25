@@ -59,6 +59,7 @@ export default function AdminPanel() {
   const [docLicenseFileName, setDocLicenseFileName] = useState("");
   const [addLoading, setAddLoading] = useState(false);
   const [addSuccess, setAddSuccess] = useState(false);
+  const [signupLink, setSignupLink] = useState("");
   const [addError, setAddError] = useState("");
 
   useEffect(() => {
@@ -141,7 +142,7 @@ export default function AdminPanel() {
         licenseDocUrl = await uploadFile(docLicenseFile);
       }
 
-      await adminRegisterDoctor({
+      const result = await adminRegisterDoctor({
         admin_telegram_id: adminTgId,
         full_name: docName.trim(),
         license_number: docLicense.trim(),
@@ -156,16 +157,13 @@ export default function AdminPanel() {
         license_document_url: licenseDocUrl,
       });
       setAddSuccess(true);
+      if (result.signup_link) {
+        setSignupLink(result.signup_link);
+      }
       // Update stats
       if (data) {
         setData({ ...data, stats: { ...data.stats, total_doctors: data.stats.total_doctors + 1 } });
       }
-      // Reset form after 2s
-      setTimeout(() => {
-        setShowAddForm(false);
-        setAddSuccess(false);
-        setDocName(""); setDocLicense(""); setDocSpecialty(""); setDocLangs(["en"]); setDocBio(""); setDocTgId(""); setDocPhone(""); setDocSex(""); setDocSubSpec(""); setDocPhoto(null); setDocPhotoPreview(""); setDocLicenseFile(null); setDocLicenseFileName("");
-      }, 2000);
     } catch (err: unknown) {
       const msg = err instanceof Error ? err.message : "Failed to register doctor";
       setAddError(msg.includes("409") ? "License or Telegram ID already registered." : msg);
@@ -249,9 +247,29 @@ export default function AdminPanel() {
             <h2 className="font-display font-semibold text-ink-rich text-[15px]">Register Doctor (Auto-Verified)</h2>
 
             {addSuccess ? (
-              <div className="py-6 text-center">
+              <div className="py-4 text-center">
                 <div className="text-3xl mb-2">✅</div>
-                <p className="font-display font-semibold text-ink-rich text-[14px]">Doctor registered successfully!</p>
+                <p className="font-display font-semibold text-ink-rich text-[14px] mb-3">Doctor registered successfully!</p>
+
+                {signupLink ? (
+                  <div className="text-left bg-surface-muted rounded-xl p-4 mb-3">
+                    <p className="text-[11px] font-semibold text-ink-muted uppercase tracking-[0.08em] mb-2">Send this link to the doctor</p>
+                    <p className="text-[12px] text-ink-secondary mb-2">They tap it to connect their Telegram account:</p>
+                    <div className="bg-surface-white rounded-lg p-3 border border-surface-border mb-3">
+                      <p className="text-[12px] font-mono text-brand-teal break-all select-all">{signupLink}</p>
+                    </div>
+                    <button
+                      onClick={() => { navigator.clipboard.writeText(signupLink); }}
+                      className="w-full py-2.5 rounded-xl bg-brand-teal text-white text-[12px] font-bold hover:bg-brand-teal-deep transition-colors"
+                    >📋 Copy Link</button>
+                  </div>
+                ) : (
+                  <p className="text-[12px] text-ink-muted">Doctor already linked to Telegram — no signup link needed.</p>
+                )}
+
+                <button onClick={() => { setShowAddForm(false); setAddSuccess(false); setSignupLink(""); setDocName(""); setDocLicense(""); setDocSpecialty(""); setDocLangs(["en"]); setDocBio(""); setDocTgId(""); setDocPhone(""); setDocSex(""); setDocSubSpec(""); setDocPhoto(null); setDocPhotoPreview(""); setDocLicenseFile(null); setDocLicenseFileName(""); }}
+                  className="mt-2 text-[13px] text-brand-teal font-semibold"
+                >Register Another Doctor</button>
               </div>
             ) : (
               <>

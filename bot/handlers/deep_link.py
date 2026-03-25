@@ -69,12 +69,76 @@ async def _execute_deep_link(update, context, deep_link) -> None:
         context.user_data["waitlist_session_id"] = deep_link.params["session_id"]
         await update.message.reply_text("Checking your waitlist slot... ⏳")
 
+    elif deep_link.type == DeepLinkType.DOCTOR_SIGNUP:
+        await _handle_doctor_signup(update, context, deep_link.params["token"])
+
     elif deep_link.type == DeepLinkType.REPORT:
         context.user_data["pending_report"] = deep_link.params
         await update.message.reply_text("Opening report form...")
 
     # Clear after execution
     context.user_data.pop("pending_deep_link", None)
+
+
+async def _handle_doctor_signup(update, context, token: str) -> None:
+    """Link a Telegram account to a pre-registered doctor profile via signup token."""
+    from bot.database import session_factory
+    from bot.models.doctor import Doctor
+    from bot.models.user import User
+    from bot.utils.keyboards import doctor_menu_keyboard
+    from bot.i18n import t
+    from sqlalchemy import select
+    from datetime import datetime, timezone
+
+    telegram_id = update.effective_user.id
+    lang = context.user_data.get("lang", "en")
+
+    async with session_factory() as session:
+        # Find doctor by token
+        result = await session.execute(
+            select(Doctor).where(Doctor.signup_token == token)
+        )
+        doctor = result.scalar_one_or_none()
+
+        if not doctor:
+            await update.message.reply_text(
+                "This signup link is invalid or has already been used. Please contact admin."
+            )
+            return
+
+        if doctor.telegram_id and doctor.telegram_id != 0 and doctor.telegram_id != telegram_id:
+            await update.message.reply_text(
+                "This doctor profile is already linked to another Telegram account. Please contact admin."
+            )
+            return
+
+        # Link telegram account
+        doctor.telegram_id = telegram_id
+        doctor.signup_token = None  # one-time use
+
+        # Ensure user record exists
+        user_result = await session.execute(
+            select(User).where(User.telegram_id == telegram_id)
+        )
+        user = user_result.scalar_one_or_none()
+        if not user:
+            user = User(
+                telegram_id=telegram_id,
+                language=lang,
+                consent_given=True,
+                consent_timestamp=datetime.now(timezone.utc),
+            )
+            session.add(user)
+
+        await session.commit()
+
+    context.user_data["lang"] = lang
+    await update.message.reply_text(
+        f"🎉 Welcome to LongiMed, Dr. {doctor.full_name}!\n\n"
+        f"Your account has been verified and is ready to go.\n"
+        f"Use the menu below to set your availability and start accepting patients.",
+        reply_markup=doctor_menu_keyboard(lang),
+    )
 
 
 deep_link_handler = CommandHandler("start", handle_deep_link, filters=None)
