@@ -46,6 +46,9 @@ STRINGS: dict[str, str] = {
     ),
 
     # ── Main menus ───────────────────────────────────────────────────────
+    "main_menu": "Main Menu",
+    "menu_patient_title": "Main Menu",
+    "menu_doctor_title": "Doctor Menu",
     "btn_ask_question": "💬 Ask a Question",
     "btn_private_consult": "🩺 Private Consultation",
     "btn_browse_doctors": "👨‍⚕️ Browse Doctors",
@@ -143,6 +146,14 @@ STRINGS: dict[str, str] = {
     "btn_search_qa": "🔍 Search Q&A",
     "btn_search_doctors": "👨‍⚕️ Find a Doctor",
     "search_enter_term": "Type your search:",
+    "search_enter_term_qa": "🔍 Type your search term to find Q&A:",
+    "search_enter_term_doctors": "🔍 Type a doctor name or specialty to search:",
+    "search_results_header": "Found {count} result(s) for \"{query}\":",
+    "search_awaiting_answer": "⏳ Awaiting answer",
+    "search_term_too_short": "Please type at least 2 characters.",
+    "search_error": "Search failed. Please try again.",
+    "btn_search_again": "🔍 Search Again",
+    "btn_book_consultation": "📅 Book Consultation",
     "search_no_results": "No results found for \"{query}\". Try different keywords.",
 
     # ── Payments ─────────────────────────────────────────────────────────

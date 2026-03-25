@@ -264,7 +264,7 @@ async def _search_doctors(term: str) -> list[dict]:
 
 search_conv_handler = ConversationHandler(
     entry_points=[
-        CallbackQueryHandler(start_search, pattern=r"^menu:(search|browse)$"),
+        CallbackQueryHandler(start_search, pattern=r"^menu:search$"),
         CommandHandler("search", start_search),
     ],
     states={
