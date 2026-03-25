@@ -170,6 +170,8 @@ export async function adminRegisterDoctor(data: {
   bio: string;
   doctor_telegram_id?: number;
   phone?: string;
+  sex?: string;
+  sub_specialization?: string;
 }): Promise<{ id: number; status: string; is_verified: boolean }> {
   return apiPost("/api/admin/doctors/register", data);
 }

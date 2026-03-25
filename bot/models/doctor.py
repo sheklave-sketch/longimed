@@ -19,7 +19,18 @@ class Specialty(str, enum.Enum):
     DERMATOLOGY = "dermatology"
     MENTAL_HEALTH = "mental_health"
     CARDIOLOGY = "cardiology"
+    INTERNAL_MEDICINE = "internal_medicine"
+    SURGERY = "surgery"
+    ORTHOPEDICS = "orthopedics"
+    ENT = "ent"
+    OPHTHALMOLOGY = "ophthalmology"
+    NEUROLOGY = "neurology"
     OTHER = "other"
+
+
+class Sex(str, enum.Enum):
+    MALE = "male"
+    FEMALE = "female"
 
 
 class RegistrationStatus(str, enum.Enum):
@@ -38,6 +49,9 @@ class Doctor(Base):
     specialty: Mapped[Specialty] = mapped_column(Enum(Specialty, values_callable=lambda e: [x.value for x in e]), nullable=False)
     languages: Mapped[list[str]] = mapped_column(ARRAY(String), default=list, nullable=False)
     bio: Mapped[str | None] = mapped_column(Text, nullable=True)
+    sex: Mapped[Sex | None] = mapped_column(Enum(Sex, values_callable=lambda e: [x.value for x in e]), nullable=True)
+    sub_specialization: Mapped[str | None] = mapped_column(String(200), nullable=True)
+    profile_photo_file_id: Mapped[str | None] = mapped_column(String(200), nullable=True)
     is_verified: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
     is_available: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
     registration_status: Mapped[RegistrationStatus] = mapped_column(

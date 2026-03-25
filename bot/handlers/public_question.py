@@ -47,28 +47,11 @@ async def ask_entry(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
     await query.answer()
 
     lang = context.user_data.get("lang", "en")
-    await query.edit_message_text(
-        text=f"💬 *Ask a Public Question*\n\n{t('qa_intro', lang)}\n\nStep 1 of 4 — {t('qa_select_category', lang)}",
-        
-        reply_markup=category_keyboard(lang),
-    )
-    return CATEGORY
-# ---------------------------------------------------------------------------
-# Step 2 — Category selected: ask about anonymity
-# ---------------------------------------------------------------------------
-
-async def category_selected(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
-    """Handle category selection, then ask anonymity preference."""
-    query = update.callback_query
-    await query.answer()
-
-    lang = context.user_data.get("lang", "en")
-    # Callback data format: "cat:<category_slug>"
-    category = query.data.split(":", 1)[1]
-    context.user_data["question_category"] = category
+    # Skip category — auto-set to general. Patients don't need to choose.
+    context.user_data["question_category"] = "general"
 
     await query.edit_message_text(
-        text=f"Step 2 of 4 — {t('qa_anonymous_prompt', lang)}",
+        text=f"💬 *Ask a Public Question*\n\n{t('qa_intro', lang)}\n\nStep 1 of 3 — {t('qa_anonymous_prompt', lang)}",
         reply_markup=anonymous_keyboard(lang),
     )
     return ANONYMITY
@@ -86,7 +69,7 @@ async def anonymity_selected(update: Update, context: ContextTypes.DEFAULT_TYPE)
     context.user_data["question_anonymous"] = query.data == "anon:yes"
 
     await query.edit_message_text(
-        text=f"Step 3 of 4 — {t('qa_enter_question', lang)}",
+        text=f"Step 2 of 3 — {t('qa_enter_question', lang)}",
     )
     return ENTER_QUESTION
 # ---------------------------------------------------------------------------
@@ -113,8 +96,7 @@ async def receive_question_text(update: Update, context: ContextTypes.DEFAULT_TY
     anon_label = "🕵️ Anonymous" if anonymous else "👤 Public"
 
     preview = (
-        f"Step 4 of 4 — Preview\n\n"
-        f"📂 Category: {category.title()}\n"
+        f"Step 3 of 3 — Preview\n\n"
         f"👁 Visibility: {anon_label}\n\n"
         f"❓ {text}"
     )
@@ -425,9 +407,6 @@ async def reject_question_cb(update: Update, context: ContextTypes.DEFAULT_TYPE)
 public_question_conv_handler = ConversationHandler(
     entry_points=[CallbackQueryHandler(ask_entry, pattern=r"^menu:ask$")],
     states={
-        CATEGORY: [
-            CallbackQueryHandler(category_selected, pattern=r"^cat:"),
-        ],
         ANONYMITY: [
             CallbackQueryHandler(anonymity_selected, pattern=r"^anon:(yes|no)$"),
         ],

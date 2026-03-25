@@ -87,6 +87,7 @@ STRINGS: dict[str, str] = {
 
     # ── Doctor menu ──────────────────────────────────────────────────────
     "btn_my_queue": "📋 My Queue",
+    "btn_waiting_patients": "👥 Waiting Patients",
     "btn_set_available": "✅ Set Available",
     "btn_set_unavailable": "🔴 Set Unavailable",
     "btn_my_schedule": "📅 My Schedule",

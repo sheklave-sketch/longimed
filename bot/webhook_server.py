@@ -781,6 +781,8 @@ async def admin_register_doctor(request: Request):
     bio = body.get("bio", "")
     doctor_telegram_id = body.get("doctor_telegram_id")
     phone = body.get("phone")
+    sex = body.get("sex")
+    sub_specialization = body.get("sub_specialization")
 
     if not full_name or not license_number or not specialty:
         raise HTTPException(status_code=400, detail="full_name, license_number, and specialty are required")
@@ -789,6 +791,14 @@ async def admin_register_doctor(request: Request):
         spec_enum = Specialty(specialty)
     except ValueError:
         raise HTTPException(status_code=400, detail=f"Invalid specialty: {specialty}")
+
+    from bot.models.doctor import Sex
+    sex_enum = None
+    if sex:
+        try:
+            sex_enum = Sex(sex)
+        except ValueError:
+            pass
 
     try:
         async with session_factory() as session:
@@ -830,6 +840,8 @@ async def admin_register_doctor(request: Request):
                 specialty=spec_enum,
                 languages=languages if isinstance(languages, list) else [languages],
                 bio=bio,
+                sex=sex_enum,
+                sub_specialization=sub_specialization,
                 is_verified=True,
                 is_available=True,
                 registration_status=RegistrationStatus.APPROVED,
@@ -932,6 +944,76 @@ async def register_doctor(request: Request):
         )
 
     return {"id": doc_id, "status": "pending"}
+
+
+# ── Doctor Waitlist — patients waiting for a doctor ──────────────────────
+
+@app.get("/api/doctors/waitlist/{telegram_id}")
+async def doctor_waitlist(telegram_id: int):
+    """Get the patient waiting list for a doctor (or all if general)."""
+    from bot.database import session_factory
+    from bot.models.doctor import Doctor
+    from bot.models.waitlist import Waitlist, WaitlistStatus
+    from bot.models.user import User
+    from bot.models.session import Session as CS, SessionStatus
+    from sqlalchemy import select, or_
+
+    async with session_factory() as session:
+        # Verify doctor
+        doc_result = await session.execute(
+            select(Doctor).where(Doctor.telegram_id == telegram_id)
+        )
+        doctor = doc_result.scalar_one_or_none()
+        if not doctor:
+            raise HTTPException(status_code=404, detail="Doctor not found")
+
+        # Get waitlist entries for this doctor or their specialty
+        wl_result = await session.execute(
+            select(Waitlist, User).join(User, Waitlist.user_id == User.id).where(
+                Waitlist.status == WaitlistStatus.WAITING,
+                or_(
+                    Waitlist.doctor_id == doctor.id,
+                    Waitlist.specialty == doctor.specialty.value,
+                ),
+            ).order_by(Waitlist.position.asc())
+        )
+        waitlist_rows = wl_result.all()
+
+        # Also get pending/awaiting sessions assigned to this doctor
+        session_result = await session.execute(
+            select(CS, User).join(User, CS.user_id == User.id).where(
+                CS.doctor_id == doctor.id,
+                CS.status.in_([SessionStatus.AWAITING_DOCTOR, SessionStatus.PENDING_APPROVAL]),
+            ).order_by(CS.created_at.asc())
+        )
+        pending_sessions = session_result.all()
+
+    items = []
+
+    for wl, user in waitlist_rows:
+        items.append({
+            "type": "waitlist",
+            "id": wl.id,
+            "position": wl.position,
+            "patient_name": f"Patient #{user.id}",
+            "patient_phone": user.phone,
+            "specialty": wl.specialty,
+            "created_at": str(wl.created_at) if hasattr(wl, 'created_at') else "",
+        })
+
+    for sess, user in pending_sessions:
+        items.append({
+            "type": "pending_session",
+            "id": sess.id,
+            "status": sess.status.value,
+            "patient_name": f"Patient #{user.id}",
+            "patient_phone": user.phone,
+            "issue": sess.issue_description[:100] if sess.issue_description else "",
+            "package": sess.package.value,
+            "created_at": str(sess.created_at),
+        })
+
+    return {"doctor_id": doctor.id, "doctor_name": doctor.full_name, "waiting": items}
 
 
 # ── Phase II webhooks (stubs) ──────────────────────────────────────────────

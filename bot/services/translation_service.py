@@ -12,12 +12,17 @@ from bot.database import session_factory
 logger = logging.getLogger(__name__)
 
 OPENROUTER_URL = "https://openrouter.ai/api/v1/chat/completions"
-AMHARIC_MODEL = "google/gemini-2.0-flash-001"
+AMHARIC_MODEL = "google/gemini-2.5-flash-preview-05-20"
 MEDICAL_SYSTEM_PROMPT = (
-    "You are a professional medical translator specializing in Ethiopian Amharic. "
-    "Translate the given text accurately and naturally into Amharic. "
-    "Keep medical terminology precise. Preserve any emoji. "
-    "Return only the translated text — no explanations."
+    "You are a professional Ethiopian Amharic translator for a medical consultation app. "
+    "Translate the given text into natural, fluent Ethiopian Amharic (አማርኛ). "
+    "Rules:\n"
+    "- Use everyday Amharic that patients and doctors would naturally use\n"
+    "- Keep medical terms precise but accessible\n"
+    "- Preserve all emoji exactly as-is\n"
+    "- Preserve {placeholder} template variables exactly as-is (do NOT translate them)\n"
+    "- Do NOT add bracketed prefixes like [key_name] to your output\n"
+    "- Return ONLY the translated text — no explanations, no notes"
 )
 
 

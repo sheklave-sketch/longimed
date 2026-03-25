@@ -6,13 +6,26 @@ import StatCard from "@/components/StatCard";
 import { initTelegram, getTelegramUser } from "@/lib/telegram";
 import { adminRegisterDoctor } from "@/lib/api";
 
+const API_BASE = process.env.NEXT_PUBLIC_API_URL || "";
+// Admin tokens — Dr. Tsegab and Moshe can access via ?token=<TOKEN>
+const ADMIN_TOKENS: Record<string, number> = {
+  "longimed-admin-tsegab-2026": 348870668,
+  "longimed-admin-moshe-2026": 297659579,
+};
+
 const SPECIALTIES = [
-  { value: "general", label: "General Medicine", icon: "🩺" },
+  { value: "general", label: "General / GP", icon: "🩺" },
+  { value: "internal_medicine", label: "Internal Medicine", icon: "💊" },
   { value: "pediatrics", label: "Pediatrics", icon: "👶" },
   { value: "obgyn", label: "OB/GYN", icon: "🤰" },
+  { value: "surgery", label: "Surgery", icon: "🔪" },
+  { value: "orthopedics", label: "Orthopedics", icon: "🦴" },
   { value: "dermatology", label: "Dermatology", icon: "🧴" },
   { value: "mental_health", label: "Mental Health", icon: "🧠" },
   { value: "cardiology", label: "Cardiology", icon: "❤️" },
+  { value: "neurology", label: "Neurology", icon: "🧬" },
+  { value: "ent", label: "ENT", icon: "👂" },
+  { value: "ophthalmology", label: "Ophthalmology", icon: "👁️" },
   { value: "other", label: "Other", icon: "➕" },
 ];
 
@@ -37,15 +50,30 @@ export default function AdminPanel() {
   const [docBio, setDocBio] = useState("");
   const [docTgId, setDocTgId] = useState("");
   const [docPhone, setDocPhone] = useState("");
+  const [docSex, setDocSex] = useState("");
+  const [docSubSpec, setDocSubSpec] = useState("");
   const [addLoading, setAddLoading] = useState(false);
   const [addSuccess, setAddSuccess] = useState(false);
   const [addError, setAddError] = useState("");
 
   useEffect(() => {
     initTelegram();
-    const tgId = getTelegramUser()?.id || 0;
+
+    // Try Telegram user first, then URL token
+    let tgId = getTelegramUser()?.id || 0;
+
+    if (!tgId && typeof window !== "undefined") {
+      const params = new URLSearchParams(window.location.search);
+      const token = params.get("token");
+      if (token && ADMIN_TOKENS[token]) {
+        tgId = ADMIN_TOKENS[token];
+      }
+    }
+
     setAdminTgId(tgId);
-    fetch(`/api/admin/dashboard/${tgId}`)
+    if (!tgId) { setLoading(false); return; }
+
+    fetch(`${API_BASE}/api/admin/dashboard/${tgId}`)
       .then((r) => { if (!r.ok) throw new Error(); return r.json(); })
       .then(setData).catch(() => setData(null)).finally(() => setLoading(false));
   }, []);
@@ -53,7 +81,7 @@ export default function AdminPanel() {
   const handleAction = async (id: number, action: "approve" | "reject") => {
     setActionLoading(id);
     try {
-      const res = await fetch(`/api/admin/doctors/${id}/${action}`, { method: "POST" });
+      const res = await fetch(`${API_BASE}/api/admin/doctors/${id}/${action}`, { method: "POST" });
       if (res.ok) setData((p) => p ? {
         ...p, pending_doctors: p.pending_doctors.filter((d) => d.id !== id),
         stats: { ...p.stats, pending_doctors: p.stats.pending_doctors - 1, total_doctors: action === "approve" ? p.stats.total_doctors + 1 : p.stats.total_doctors },
@@ -78,6 +106,8 @@ export default function AdminPanel() {
         bio: docBio.trim(),
         doctor_telegram_id: docTgId ? parseInt(docTgId) : undefined,
         phone: docPhone || undefined,
+        sex: docSex || undefined,
+        sub_specialization: docSubSpec.trim() || undefined,
       });
       setAddSuccess(true);
       // Update stats
@@ -88,7 +118,7 @@ export default function AdminPanel() {
       setTimeout(() => {
         setShowAddForm(false);
         setAddSuccess(false);
-        setDocName(""); setDocLicense(""); setDocSpecialty(""); setDocLangs(["en"]); setDocBio(""); setDocTgId(""); setDocPhone("");
+        setDocName(""); setDocLicense(""); setDocSpecialty(""); setDocLangs(["en"]); setDocBio(""); setDocTgId(""); setDocPhone(""); setDocSex(""); setDocSubSpec("");
       }, 2000);
     } catch (err: unknown) {
       const msg = err instanceof Error ? err.message : "Failed to register doctor";
@@ -210,7 +240,26 @@ export default function AdminPanel() {
                 </div>
 
                 <div>
-                  <label className="text-[11px] font-semibold text-ink-muted uppercase tracking-[0.08em] mb-1.5 block">Bio</label>
+                  <label className="text-[11px] font-semibold text-ink-muted uppercase tracking-[0.08em] mb-1.5 block">Sex</label>
+                  <div className="flex gap-2">
+                    {[{ v: "male", l: "👨 Male" }, { v: "female", l: "👩 Female" }].map(({ v, l }) => (
+                      <button key={v} onClick={() => setDocSex(v)}
+                        className={`flex-1 py-2 rounded-xl text-[12px] font-semibold transition-all ${
+                          docSex === v ? "bg-brand-teal text-white" : "bg-surface-muted text-ink-body"
+                        }`}
+                      >{l}</button>
+                    ))}
+                  </div>
+                </div>
+
+                <div>
+                  <label className="text-[11px] font-semibold text-ink-muted uppercase tracking-[0.08em] mb-1.5 block">Sub-Specialization</label>
+                  <input type="text" value={docSubSpec} onChange={(e) => setDocSubSpec(e.target.value)} placeholder="e.g., Pediatric Cardiology, Trauma Surgery"
+                    className="w-full bg-surface-white border border-surface-border rounded-xl px-3.5 py-2.5 text-[13px] text-ink-rich placeholder:text-ink-faint focus:outline-none focus:border-brand-teal transition-all" />
+                </div>
+
+                <div>
+                  <label className="text-[11px] font-semibold text-ink-muted uppercase tracking-[0.08em] mb-1.5 block">Bio / Description</label>
                   <textarea value={docBio} onChange={(e) => setDocBio(e.target.value)} placeholder="Brief bio..." rows={2}
                     className="w-full bg-surface-white border border-surface-border rounded-xl px-3.5 py-2.5 text-[13px] text-ink-rich placeholder:text-ink-faint focus:outline-none focus:border-brand-teal transition-all resize-none" />
                 </div>

@@ -35,6 +35,8 @@ async def handle_doc_menu(update: Update, context: ContextTypes.DEFAULT_TYPE) ->
     try:
         if action == "queue":
             await _doc_queue(query, update.effective_user.id)
+        elif action == "waitlist":
+            await _doc_waitlist(query, update.effective_user.id)
         elif action == "available":
             await _doc_set_availability(query, update.effective_user.id, True)
         elif action == "unavailable":
@@ -99,6 +101,75 @@ async def _doc_queue(query, telegram_id: int) -> None:
     for s in sessions:
         status = s.status.value if hasattr(s.status, 'value') else s.status
         lines.append(f"  #{s.id} — {status} — {s.issue_description[:40]}...")
+    await query.edit_message_text("\n".join(lines), reply_markup=back_btn)
+
+
+async def _doc_waitlist(query, telegram_id: int) -> None:
+    """Show patients waiting for this doctor."""
+    from bot.models.doctor import Doctor
+    from bot.models.waitlist import Waitlist, WaitlistStatus
+    from bot.models.session import Session as CS, SessionStatus
+    from bot.models.user import User
+    from sqlalchemy import select, or_
+
+    async with session_factory() as session:
+        result = await session.execute(
+            select(Doctor).where(Doctor.telegram_id == telegram_id)
+        )
+        doctor = result.scalar_one_or_none()
+        if not doctor:
+            await query.edit_message_text("Doctor record not found.")
+            return
+
+        # Waitlist entries
+        wl_result = await session.execute(
+            select(Waitlist, User).join(User, Waitlist.user_id == User.id).where(
+                Waitlist.status == WaitlistStatus.WAITING,
+                or_(
+                    Waitlist.doctor_id == doctor.id,
+                    Waitlist.specialty == doctor.specialty.value,
+                ),
+            ).order_by(Waitlist.position.asc())
+        )
+        waitlist_rows = wl_result.all()
+
+        # Pending sessions
+        sess_result = await session.execute(
+            select(CS, User).join(User, CS.user_id == User.id).where(
+                CS.doctor_id == doctor.id,
+                CS.status.in_([SessionStatus.AWAITING_DOCTOR, SessionStatus.PENDING_APPROVAL]),
+            ).order_by(CS.created_at.asc())
+        )
+        pending_rows = sess_result.all()
+
+    back_btn = InlineKeyboardMarkup([[InlineKeyboardButton("\u2190 Back to Menu", callback_data="backtomenu")]])
+
+    lines = ["📋 Patients Waiting\n"]
+
+    if pending_rows:
+        lines.append("— Pending Sessions —")
+        for sess, user in pending_rows:
+            status = sess.status.value.replace("_", " ").title()
+            phone = f" | 📞 {user.phone}" if user.phone else ""
+            lines.append(f"  #{sess.id} {status}{phone}")
+            if sess.issue_description:
+                lines.append(f"    {sess.issue_description[:60]}...")
+        lines.append("")
+
+    if waitlist_rows:
+        lines.append("— Waitlist —")
+        for wl, user in waitlist_rows:
+            phone = f" | 📞 {user.phone}" if user.phone else ""
+            lines.append(f"  #{wl.position} Patient #{user.id}{phone} ({wl.specialty})")
+        lines.append("")
+
+    if not pending_rows and not waitlist_rows:
+        lines.append("No patients waiting right now.")
+
+    total = len(pending_rows) + len(waitlist_rows)
+    if total:
+        lines.insert(1, f"Total: {total} patient(s)\n")
+
     await query.edit_message_text("\n".join(lines), reply_markup=back_btn)
 
 

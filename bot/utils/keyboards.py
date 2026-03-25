@@ -19,6 +19,7 @@ def main_menu_keyboard(lang: str) -> InlineKeyboardMarkup:
 def doctor_menu_keyboard(lang: str) -> InlineKeyboardMarkup:
     return InlineKeyboardMarkup([
         [InlineKeyboardButton(t("btn_my_queue", lang), callback_data="doc:queue")],
+        [InlineKeyboardButton(t("btn_waiting_patients", lang), callback_data="doc:waitlist")],
         [
             InlineKeyboardButton(t("btn_set_available", lang), callback_data="doc:available"),
             InlineKeyboardButton(t("btn_set_unavailable", lang), callback_data="doc:unavailable"),
