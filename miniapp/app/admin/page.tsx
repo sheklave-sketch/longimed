@@ -139,8 +139,16 @@ export default function AdminPanel() {
   );
 
   if (!data) {
-    if (typeof window !== "undefined") window.location.href = "/";
-    return null;
+    return (
+      <div className="pt-10 px-6 text-center">
+        <h2 className="font-display font-bold text-[20px] text-ink-rich mb-2">Admin Panel</h2>
+        <p className="text-ink-secondary text-[14px] mb-4">
+          {adminTgId ? `Could not load dashboard for TG ID ${adminTgId}. The API may be unreachable.` : "No admin credentials detected. Open from Telegram or use a token link."}
+        </p>
+        <p className="text-ink-muted text-[12px] mb-4">API: {API_BASE || "(not set)"}</p>
+        <a href="/" className="text-brand-teal font-semibold text-[14px]">← Back to Home</a>
+      </div>
+    );
   }
 
   const { stats, pending_doctors, recent_payments } = data;
