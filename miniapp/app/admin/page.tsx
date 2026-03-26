@@ -149,7 +149,7 @@ export default function AdminPanel() {
         specialty: docSpecialty,
         languages: docLangs,
         bio: docBio.trim(),
-        doctor_telegram_id: docTgId && /^\d+$/.test(docTgId.trim()) ? parseInt(docTgId.trim()) : undefined,
+        telegram_username: docTgId.trim().replace(/^@/, "") || undefined,
         phone: docPhone || undefined,
         sex: docSex || undefined,
         sub_specialization: docSubSpec.trim() || undefined,
@@ -368,10 +368,10 @@ export default function AdminPanel() {
                   <p className="text-[11px] font-semibold text-ink-muted uppercase tracking-[0.08em] mb-2">Optional — Telegram & Phone</p>
                   <div className="space-y-3">
                     <div>
-                      <label className="text-[11px] text-ink-secondary mb-1 block">Doctor&apos;s Telegram ID</label>
-                      <input type="text" value={docTgId} onChange={(e) => setDocTgId(e.target.value)} placeholder="e.g., 348870668"
+                      <label className="text-[11px] text-ink-secondary mb-1 block">Doctor&apos;s Telegram Username</label>
+                      <input type="text" value={docTgId} onChange={(e) => setDocTgId(e.target.value)} placeholder="e.g., @matjohn4"
                         className="w-full bg-surface-white border border-surface-border rounded-xl px-3.5 py-2.5 text-[13px] text-ink-rich placeholder:text-ink-faint focus:outline-none focus:border-brand-teal transition-all" />
-                      <p className="text-[10px] text-ink-muted mt-1">If provided, the doctor will be notified on Telegram</p>
+                      <p className="text-[10px] text-ink-muted mt-1">A signup link will be generated to connect their Telegram account</p>
                     </div>
                     <div>
                       <label className="text-[11px] text-ink-secondary mb-1 block">Phone Number</label>

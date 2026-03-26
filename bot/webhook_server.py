@@ -811,7 +811,7 @@ async def admin_register_doctor(request: Request):
     specialty = body.get("specialty")
     languages = body.get("languages", ["en"])
     bio = body.get("bio", "")
-    doctor_telegram_id = body.get("doctor_telegram_id")
+    telegram_username = body.get("telegram_username")
     phone = body.get("phone")
     sex = body.get("sex")
     sub_specialization = body.get("sub_specialization")
@@ -843,37 +843,11 @@ async def admin_register_doctor(request: Request):
             if existing:
                 raise HTTPException(status_code=409, detail="License number already registered")
 
-            # If telegram_id provided, check uniqueness
-            if doctor_telegram_id:
-                existing_tg = (await session.execute(
-                    select(Doctor).where(Doctor.telegram_id == doctor_telegram_id)
-                )).scalar_one_or_none()
-                if existing_tg:
-                    raise HTTPException(status_code=409, detail="Telegram account already registered as doctor")
-
-                # Ensure user record exists (create if not)
-                user_result = (await session.execute(
-                    select(User).where(User.telegram_id == doctor_telegram_id)
-                )).scalar_one_or_none()
-                if not user_result:
-                    user = User(
-                        telegram_id=doctor_telegram_id,
-                        phone=phone,
-                        language="en",
-                        consent_given=True,
-                        consent_timestamp=datetime.now(timezone.utc),
-                    )
-                    session.add(user)
-                elif phone and not user_result.phone:
-                    user_result.phone = phone
-
-            # Generate signup token for Telegram linking (if no TG ID provided)
-            signup_token = None
-            if not doctor_telegram_id:
-                signup_token = uuid.uuid4().hex[:16]
+            # Always generate signup token — doctor links TG account via deep link
+            signup_token = uuid.uuid4().hex[:16]
 
             doctor = Doctor(
-                telegram_id=doctor_telegram_id or None,
+                telegram_id=None,
                 full_name=full_name,
                 license_number=license_number,
                 specialty=spec_enum,
@@ -899,19 +873,8 @@ async def admin_register_doctor(request: Request):
         logger.exception("Admin doctor registration failed")
         raise HTTPException(status_code=500, detail="Internal server error")
 
-    # Notify doctor on Telegram if they have a telegram_id
-    if doctor_telegram_id:
-        await _tg_notify(
-            doctor_telegram_id,
-            f"🎉 Welcome to LongiMed, Dr. {full_name}!\n\n"
-            f"You have been registered and verified as a LongiMed doctor.\n"
-            f"Send /start to the bot to access your doctor menu.",
-        )
-
     # Build signup link for the doctor to connect their Telegram
-    signup_link = None
-    if signup_token:
-        signup_link = f"https://t.me/longimed_bot?start=signup_{signup_token}"
+    signup_link = f"https://t.me/longimed_bot?start=signup_{signup_token}"
 
     return {
         "id": doc_id,

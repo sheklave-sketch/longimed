@@ -169,7 +169,7 @@ export async function adminRegisterDoctor(data: {
   specialty: string;
   languages: string[];
   bio: string;
-  doctor_telegram_id?: number;
+  telegram_username?: string;
   phone?: string;
   sex?: string;
   sub_specialization?: string;
