@@ -44,7 +44,7 @@ services:
       DATABASE_URL: postgresql+asyncpg://medic:password@db:5432/longimed
       REDIS_URL: redis://redis:6379/0
     ports:
-      - "127.0.0.1:8000:8000"   # localhost only — nginx proxies inbound
+      - "0.0.0.0:8000:8000"
     depends_on:
       db:
         condition: service_healthy

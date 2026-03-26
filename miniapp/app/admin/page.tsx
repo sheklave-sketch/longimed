@@ -149,7 +149,7 @@ export default function AdminPanel() {
         specialty: docSpecialty,
         languages: docLangs,
         bio: docBio.trim(),
-        doctor_telegram_id: docTgId ? parseInt(docTgId) : undefined,
+        doctor_telegram_id: docTgId && /^\d+$/.test(docTgId.trim()) ? parseInt(docTgId.trim()) : undefined,
         phone: docPhone || undefined,
         sex: docSex || undefined,
         sub_specialization: docSubSpec.trim() || undefined,

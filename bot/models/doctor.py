@@ -43,7 +43,7 @@ class Doctor(Base):
     __tablename__ = "doctors"
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True)
-    telegram_id: Mapped[int] = mapped_column(BigInteger, unique=True, nullable=False, index=True)
+    telegram_id: Mapped[int | None] = mapped_column(BigInteger, unique=True, nullable=True, index=True)
     full_name: Mapped[str] = mapped_column(String(200), nullable=False)
     license_number: Mapped[str] = mapped_column(String(100), unique=True, nullable=False)
     specialty: Mapped[Specialty] = mapped_column(Enum(Specialty, values_callable=lambda e: [x.value for x in e]), nullable=False)

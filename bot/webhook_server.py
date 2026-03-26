@@ -873,7 +873,7 @@ async def admin_register_doctor(request: Request):
                 signup_token = uuid.uuid4().hex[:16]
 
             doctor = Doctor(
-                telegram_id=doctor_telegram_id or 0,
+                telegram_id=doctor_telegram_id or None,
                 full_name=full_name,
                 license_number=license_number,
                 specialty=spec_enum,
