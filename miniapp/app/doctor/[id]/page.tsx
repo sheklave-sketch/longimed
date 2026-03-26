@@ -63,9 +63,13 @@ export default function DoctorProfile() {
       <motion.div initial={{ opacity: 0, y: 16 }} animate={{ opacity: 1, y: 0 }} className="card p-6 text-center mb-4">
         {/* Avatar */}
         <div className="relative inline-block mb-4">
-          <div className="w-20 h-20 rounded-3xl bg-gradient-teal flex items-center justify-center text-white font-display font-bold text-2xl shadow-glow mx-auto">
-            {initials}
-          </div>
+          {doctor.profile_photo_url ? (
+            <img src={doctor.profile_photo_url} alt={doctor.full_name} className="w-20 h-20 rounded-3xl object-cover shadow-glow mx-auto" />
+          ) : (
+            <div className="w-20 h-20 rounded-3xl bg-gradient-teal flex items-center justify-center text-white font-display font-bold text-2xl shadow-glow mx-auto">
+              {initials}
+            </div>
+          )}
           <div className={`absolute -bottom-1 -right-1 w-5 h-5 rounded-full ring-[3px] ring-white flex items-center justify-center ${doctor.is_available ? "bg-emerald-400" : "bg-gray-300"}`}>
             <svg width="10" height="10" viewBox="0 0 10 10" fill="none"><path d="M2.5 5L4.5 7L7.5 3" stroke="white" strokeWidth="1.3" strokeLinecap="round" strokeLinejoin="round"/></svg>
           </div>

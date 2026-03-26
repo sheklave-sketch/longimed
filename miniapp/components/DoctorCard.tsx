@@ -29,9 +29,13 @@ export default function DoctorCard({ doctor, index = 0 }: { doctor: Doctor; inde
           <div className="flex items-center gap-4">
             {/* Avatar */}
             <div className="relative shrink-0">
-              <div className="w-[52px] h-[52px] rounded-2xl bg-gradient-teal flex items-center justify-center text-white font-display font-bold text-lg shadow-glow-sm">
-                {initials}
-              </div>
+              {doctor.profile_photo_url ? (
+                <img src={doctor.profile_photo_url} alt={doctor.full_name} className="w-[52px] h-[52px] rounded-2xl object-cover shadow-glow-sm" />
+              ) : (
+                <div className="w-[52px] h-[52px] rounded-2xl bg-gradient-teal flex items-center justify-center text-white font-display font-bold text-lg shadow-glow-sm">
+                  {initials}
+                </div>
+              )}
               <div className={`absolute -bottom-0.5 -right-0.5 ${doctor.is_available ? "status-online" : "status-offline"} ring-2 ring-white`} />
             </div>
 

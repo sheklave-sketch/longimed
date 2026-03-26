@@ -144,6 +144,7 @@ async def list_doctors(specialty: str | None = None):
             "rating_avg": round(d.rating_avg, 2),
             "rating_count": d.rating_count,
             "languages": d.languages,
+            "profile_photo_url": d.profile_photo_file_id,
         }
         for d in doctors
     ]
@@ -175,6 +176,7 @@ async def get_doctor(doctor_id: int):
         "rating_avg": round(doctor.rating_avg, 2),
         "rating_count": doctor.rating_count,
         "languages": doctor.languages,
+        "profile_photo_url": doctor.profile_photo_file_id,
     }
 
 
@@ -783,6 +785,7 @@ async def search_doctors(q: str = ""):
             "rating_avg": round(d.rating_avg, 2),
             "rating_count": d.rating_count,
             "languages": d.languages,
+            "profile_photo_url": d.profile_photo_file_id,
         }
         for d in doctors
     ]

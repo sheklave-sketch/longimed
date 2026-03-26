@@ -11,6 +11,7 @@ export interface Doctor {
   rating_count: number;
   languages: string[];
   license_number?: string;
+  profile_photo_url?: string | null;
 }
 
 export interface Question {
