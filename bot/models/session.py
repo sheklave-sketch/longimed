@@ -4,7 +4,7 @@ import enum
 from datetime import datetime
 
 from sqlalchemy import (
-    Boolean, DateTime, Enum, ForeignKey, Integer, String, Text, func,
+    BigInteger, Boolean, DateTime, Enum, ForeignKey, Integer, String, Text, func,
 )
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
@@ -48,7 +48,7 @@ class Session(Base):
 
     # For TOPIC mode: forum thread in supergroup
     topic_id: Mapped[int | None] = mapped_column(Integer, nullable=True)
-    group_chat_id: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    group_chat_id: Mapped[int | None] = mapped_column(BigInteger, nullable=True)
 
     # Resolution
     resolution_confirmed_by_doctor: Mapped[bool] = mapped_column(Boolean, default=False)
