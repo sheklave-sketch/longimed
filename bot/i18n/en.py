@@ -248,6 +248,71 @@ STRINGS: dict[str, str] = {
     "session_reply_prompt": "💬 Type your reply to the patient below.",
     "session_reply_sent": "✅ Reply sent to the patient.",
 
+    # ── Consultation Room ────────────────────────────────────────────────
+    "room_intro": (
+        "🩺 *Consultation Session #{session_id}*\n\n"
+        "👨‍⚕️ *Doctor:* Dr. {doctor_name}\n"
+        "📋 *Topic:* {issue}\n\n"
+        "━━━━━━━━━━━━━━━━━━━━━━\n"
+        "📌 *Session Rules:*\n"
+        "• Text, voice messages, photos & documents are allowed\n"
+        "• 📹 The doctor may initiate a video call if needed\n"
+        "• Be respectful and share only relevant medical information\n"
+        "• Do NOT share payment or banking details here\n\n"
+        "⏹ Type /end when the session is complete\n"
+        "🔒 All messages will be deleted and you will be "
+        "removed from this room once the session ends."
+    ),
+    "room_join_patient": (
+        "✅ Your doctor has accepted the session!\n\n"
+        "Chat directly with your doctor in the consultation room.\n"
+        "Use /end when the session is complete."
+    ),
+    "room_join_doctor": (
+        "✅ Session #{session_id} is now active.\n\n"
+        "Join the consultation room to chat with your patient.\n"
+        "Use /end when the consultation is complete."
+    ),
+    "room_join_button": "🩺 Join Consultation Room",
+    "room_end_request": (
+        "⏹ {who} has requested to end this session.\n\n"
+        "If you agree, tap the button below to confirm."
+    ),
+    "room_end_confirm_button": "✅ Confirm End Session",
+    "room_end_already": "You already requested to end. Waiting for the other party.",
+    "room_end_resolved": (
+        "✅ *Session ended*\n\n"
+        "Both parties have confirmed. This room will now be cleaned up.\n"
+        "All messages will be deleted and participants removed.\n\n"
+        "Thank you for using LongiMed!"
+    ),
+    "room_end_waiting": "You've requested to end the session. Waiting for the other party to confirm.",
+    "room_end_done": "Session resolved. Thank you!",
+    "room_no_active": "No active session found.",
+    "room_fallback_patient": (
+        "✅ Your doctor has accepted the session!\n\n"
+        "All rooms are busy — send your messages here "
+        "and the bot will relay them to your doctor.\n\n"
+        "Use /end when you're done."
+    ),
+    "room_fallback_doctor": (
+        "Session is now active (relay mode — rooms were full).\n\n"
+        "Send your messages here and the bot will forward them to the patient.\n"
+        "Use /end when the consultation is complete."
+    ),
+    "relay_patient_instructions": (
+        "Your doctor has accepted the session!\n\n"
+        "This is a relay (anonymous) session. Send your messages here "
+        "and the bot will forward them to your doctor.\n\n"
+        "Use /end when you're done."
+    ),
+    "relay_doctor_instructions": (
+        "This is a relay (anonymous) session. The patient's identity is hidden.\n\n"
+        "Send your messages here and the bot will forward them to the patient.\n"
+        "Use /end when the consultation is complete."
+    ),
+    "session_rate_prompt": "Your session has been resolved.\n\nPlease rate your experience:",
+
     # ── Navigation ──────────────────────────────────────────────────────
     "nav_back_menu": "← Back to Menu",
     "nav_no_active_session": "No active session found. Use /menu to return to your menu.",

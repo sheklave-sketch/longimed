@@ -132,6 +132,7 @@ async def end_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> Non
 
                 is_doctor_ending = doctor and doctor.id == room_session.doctor_id
                 patient_user = await session.get(User, room_session.user_id)
+                patient_lang = patient_user.language if patient_user else "en"
                 doctor_obj = await session.get(Doctor, room_session.doctor_id) if room_session.doctor_id else None
 
                 if is_doctor_ending:
@@ -153,8 +154,7 @@ async def end_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> Non
                     await session.commit()
 
                     await update.message.reply_text(
-                        "✅ *Session ended*\n\n"
-                        "Both parties confirmed. Cleaning up room...",
+                        t("room_end_resolved", patient_lang),
                         parse_mode="Markdown",
                     )
 
@@ -178,7 +178,7 @@ async def end_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> Non
                             ])
                             await context.bot.send_message(
                                 chat_id=patient_user.telegram_id,
-                                text="Your session has been resolved.\n\nPlease rate your experience:",
+                                text=t("session_rate_prompt", patient_lang),
                                 reply_markup=followup_kb,
                             )
                         except Exception as exc:
@@ -187,13 +187,12 @@ async def end_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> Non
                     await session.commit()
                     confirm_kb = InlineKeyboardMarkup([
                         [InlineKeyboardButton(
-                            "✅ Confirm End Session",
+                            t("room_end_confirm_button", patient_lang),
                             callback_data=f"confirm_end:{room_session.id}",
                         )],
                     ])
                     await update.message.reply_text(
-                        f"⏹ {who_ended} has requested to end this session.\n\n"
-                        f"The other party should tap the button below to confirm.",
+                        t("room_end_request", patient_lang, who=who_ended),
                         reply_markup=confirm_kb,
                     )
                 return
@@ -243,6 +242,7 @@ async def end_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> Non
             room_id = active_session.group_chat_id
             session_id = active_session.id
             patient_user = await session.get(User, active_session.user_id)
+            patient_lang = patient_user.language if patient_user else "en"
             doctor_obj = await session.get(Doctor, active_session.doctor_id) if active_session.doctor_id else None
 
             if is_doctor_ending:
@@ -258,24 +258,17 @@ async def end_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> Non
             )
 
             if both_confirmed:
-                # ── Both confirmed — resolve session ──
                 active_session.status = SessionStatus.RESOLVED
                 active_session.ended_at = datetime.now(timezone.utc)
                 await session.commit()
 
-                await update.message.reply_text("Session resolved. Thank you!", reply_markup=back_btn)
+                await update.message.reply_text(t("room_end_done", lang), reply_markup=back_btn)
 
-                # Notify + clean up room
                 if room_id:
                     try:
                         await context.bot.send_message(
                             chat_id=room_id,
-                            text=(
-                                "✅ *Session ended*\n\n"
-                                "Both parties have confirmed. This room will now be cleaned up.\n"
-                                "All messages will be deleted and participants removed.\n\n"
-                                "Thank you for using LongiMed!"
-                            ),
+                            text=t("room_end_resolved", patient_lang),
                             parse_mode="Markdown",
                         )
                     except Exception:
@@ -286,7 +279,6 @@ async def end_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> Non
                         doctor_obj.telegram_id if doctor_obj else None,
                     )
 
-                # Send rating to patient
                 if patient_user:
                     try:
                         followup_kb = InlineKeyboardMarkup([
@@ -300,36 +292,30 @@ async def end_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> Non
                         ])
                         await context.bot.send_message(
                             chat_id=patient_user.telegram_id,
-                            text="Your session has been resolved.\n\nPlease rate your experience:",
+                            text=t("session_rate_prompt", patient_lang),
                             reply_markup=followup_kb,
                         )
                     except Exception as exc:
                         logger.error("Failed to send rating to patient: %s", exc)
 
             else:
-                # ── First /end — send confirm button in room ──
                 await session.commit()
 
                 await update.message.reply_text(
-                    "You've requested to end the session. Waiting for the other party to confirm in the room.",
-                    reply_markup=back_btn,
+                    t("room_end_waiting", lang), reply_markup=back_btn,
                 )
 
-                # Send confirm button in the consultation room
                 if room_id:
                     confirm_kb = InlineKeyboardMarkup([
                         [InlineKeyboardButton(
-                            "✅ Confirm End Session",
+                            t("room_end_confirm_button", patient_lang),
                             callback_data=f"confirm_end:{session_id}",
                         )],
                     ])
                     try:
                         await context.bot.send_message(
                             chat_id=room_id,
-                            text=(
-                                f"⏹ {who_ended} has requested to end this session.\n\n"
-                                f"If you agree, tap the button below to confirm."
-                            ),
+                            text=t("room_end_request", patient_lang, who=who_ended),
                             reply_markup=confirm_kb,
                         )
                     except Exception as exc:
@@ -383,6 +369,8 @@ async def confirm_end_callback(update: Update, context: ContextTypes.DEFAULT_TYP
                 await query.answer("You already requested to end. Waiting for the other party.", show_alert=True)
                 return
 
+            patient_lang = patient_user.language if patient_user else "en"
+
             if is_doctor:
                 active_session.resolution_confirmed_by_doctor = True
             else:
@@ -395,7 +383,7 @@ async def confirm_end_callback(update: Update, context: ContextTypes.DEFAULT_TYP
 
             if not both_confirmed:
                 await query.edit_message_text(
-                    "✅ You've confirmed. Waiting for the other party to send /end in the bot."
+                    t("room_end_waiting", patient_lang)
                 )
                 return
 
@@ -406,10 +394,7 @@ async def confirm_end_callback(update: Update, context: ContextTypes.DEFAULT_TYP
             await session.commit()
 
         await query.edit_message_text(
-            "✅ *Session ended*\n\n"
-            "Both parties have confirmed. This room will now be cleaned up.\n"
-            "All messages will be deleted and participants removed.\n\n"
-            "Thank you for using LongiMed!",
+            t("room_end_resolved", patient_lang),
             parse_mode="Markdown",
         )
 
@@ -427,7 +412,7 @@ async def confirm_end_callback(update: Update, context: ContextTypes.DEFAULT_TYP
                 ])
                 await context.bot.send_message(
                     chat_id=patient_user.telegram_id,
-                    text="Your session has been resolved.\n\nPlease rate your experience:",
+                    text=t("session_rate_prompt", patient_lang),
                     reply_markup=followup_kb,
                 )
             except Exception as exc:
@@ -438,7 +423,7 @@ async def confirm_end_callback(update: Update, context: ContextTypes.DEFAULT_TYP
             try:
                 await context.bot.send_message(
                     chat_id=doctor_obj.telegram_id,
-                    text="✅ Session resolved. Thank you!",
+                    text=t("room_end_done", "en"),
                 )
             except Exception:
                 pass
@@ -486,16 +471,13 @@ async def _fallback_to_relay(context, session_id: int, patient_user, doctor_tg_i
         s.session_mode = SessionMode.RELAY
         await db.commit()
 
+    patient_lang = patient_user.language if patient_user else "en"
+
     if patient_user:
         try:
             await context.bot.send_message(
                 chat_id=patient_user.telegram_id,
-                text=(
-                    "✅ Your doctor has accepted the session!\n\n"
-                    "All rooms are busy — send your messages here "
-                    "and the bot will relay them to your doctor.\n\n"
-                    "Use /end when you're done."
-                ),
+                text=t("room_fallback_patient", patient_lang),
             )
         except Exception:
             pass
@@ -503,11 +485,7 @@ async def _fallback_to_relay(context, session_id: int, patient_user, doctor_tg_i
     try:
         await context.bot.send_message(
             chat_id=doctor_tg_id,
-            text=(
-                "Session is now active (relay mode — rooms were full).\n\n"
-                "Send your messages here and the bot will forward them to the patient.\n"
-                "Use /end when the consultation is complete."
-            ),
+            text=t("room_fallback_doctor", "en"),
         )
     except Exception:
         pass
@@ -597,6 +575,7 @@ async def accept_session_callback(update: Update, context: ContextTypes.DEFAULT_
             s.status = SessionStatus.ACTIVE
             s.started_at = datetime.now(timezone.utc)
             patient_user = await session.get(User, s.user_id)
+            patient_lang = patient_user.language if patient_user else "en"
             is_relay = s.session_mode == SessionMode.RELAY
             is_topic = s.session_mode == SessionMode.TOPIC
             issue_desc = s.issue_description[:100]
@@ -637,28 +616,15 @@ async def accept_session_callback(update: Update, context: ContextTypes.DEFAULT_
                         name=f"Session #{session_id}",
                     )
 
-                    # Send welcome message in the room
+                    # Send welcome message in the room (patient's language)
                     await context.bot.send_message(
                         chat_id=room_id,
-                        text=(
-                            f"🩺 *Consultation Session #{session_id}*\n\n"
-                            f"👨‍⚕️ *Doctor:* Dr. {doctor_name}\n"
-                            f"📋 *Topic:* {issue_desc}\n\n"
-                            f"━━━━━━━━━━━━━━━━━━━━━━\n"
-                            f"📌 *Session Rules:*\n"
-                            f"• Text, voice messages, photos & documents are allowed\n"
-                            f"• 📹 The doctor may initiate a video call if needed\n"
-                            f"• Be respectful and share only relevant medical information\n"
-                            f"• Do NOT share payment or banking details here\n\n"
-                            f"⏹ Type /end when the session is complete\n"
-                            f"🔒 All messages will be deleted and you will be "
-                            f"removed from this room once the session ends."
-                        ),
+                        text=t("room_intro", patient_lang, session_id=session_id, doctor_name=doctor_name, issue=issue_desc),
                         parse_mode="Markdown",
                     )
 
                     room_kb = InlineKeyboardMarkup([
-                        [InlineKeyboardButton("🩺 Join Consultation Room", url=invite.invite_link)]
+                        [InlineKeyboardButton(t("room_join_button", patient_lang), url=invite.invite_link)]
                     ])
 
                     # Notify patient
@@ -666,11 +632,7 @@ async def accept_session_callback(update: Update, context: ContextTypes.DEFAULT_
                         try:
                             await context.bot.send_message(
                                 chat_id=patient_user.telegram_id,
-                                text=(
-                                    "✅ Your doctor has accepted the session!\n\n"
-                                    "Chat directly with your doctor in the consultation room.\n"
-                                    "Use /end here when the session is complete."
-                                ),
+                                text=t("room_join_patient", patient_lang),
                                 reply_markup=room_kb,
                             )
                         except Exception as exc:
@@ -680,11 +642,7 @@ async def accept_session_callback(update: Update, context: ContextTypes.DEFAULT_
                     try:
                         await context.bot.send_message(
                             chat_id=update.effective_user.id,
-                            text=(
-                                f"✅ Session #{session_id} is now active.\n\n"
-                                "Join the consultation room to chat with your patient.\n"
-                                "Use /end here when the consultation is complete."
-                            ),
+                            text=t("room_join_doctor", "en", session_id=session_id),
                             reply_markup=room_kb,
                         )
                     except Exception as exc:
@@ -706,12 +664,7 @@ async def accept_session_callback(update: Update, context: ContextTypes.DEFAULT_
                 try:
                     await context.bot.send_message(
                         chat_id=patient_user.telegram_id,
-                        text=(
-                            "Your doctor has accepted the session!\n\n"
-                            "This is a relay (anonymous) session. Send your messages here "
-                            "and the bot will forward them to your doctor.\n\n"
-                            "Use /end when you're done."
-                        ),
+                        text=t("relay_patient_instructions", patient_lang),
                     )
                 except Exception as exc:
                     logger.error("Failed to notify patient of acceptance: %s", exc)
@@ -719,11 +672,7 @@ async def accept_session_callback(update: Update, context: ContextTypes.DEFAULT_
             try:
                 await context.bot.send_message(
                     chat_id=update.effective_user.id,
-                    text=(
-                        "This is a relay (anonymous) session. The patient's identity is hidden.\n\n"
-                        "Send your messages here and the bot will forward them to the patient.\n"
-                        "Use /end when the consultation is complete."
-                    ),
+                    text=t("relay_doctor_instructions", "en"),
                 )
             except Exception as exc:
                 logger.error("Failed to send relay instructions to doctor: %s", exc)
