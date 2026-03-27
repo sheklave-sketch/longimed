@@ -534,7 +534,7 @@ async def _notify_doctor_new_session(context, session_id: int, lang: str) -> Non
             return
         doctor = await session.get(Doctor, s.doctor_id)
 
-    if doctor:
+    if doctor and doctor.telegram_id:
         mode_label = "Anonymous (relay)" if s.is_anonymous else "Named (topic)"
         accept_keyboard = InlineKeyboardMarkup([[
             InlineKeyboardButton("\u2705 Accept Session", callback_data=f"accept_session:{session_id}"),
@@ -552,6 +552,20 @@ async def _notify_doctor_new_session(context, session_id: int, lang: str) -> Non
             )
         except Exception as exc:
             logger.error("Failed to notify doctor: %s", exc)
+    elif doctor and not doctor.telegram_id:
+        # Doctor hasn't linked their Telegram — alert admins
+        from bot.config import settings as app_settings
+        for admin_id in app_settings.admin_ids:
+            try:
+                await context.bot.send_message(
+                    chat_id=admin_id,
+                    text=(
+                        f"⚠️ Session #{session_id}: Dr. {doctor.full_name} has no Telegram linked.\n"
+                        f"Send them the signup link to connect their account."
+                    ),
+                )
+            except Exception:
+                pass
 async def _start_doctor_timer(context, session_id: int) -> None:
     from bot.config import settings
     context.job_queue.run_once(
