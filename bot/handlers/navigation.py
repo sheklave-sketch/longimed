@@ -265,6 +265,7 @@ async def confirm_end_callback(update: Update, context: ContextTypes.DEFAULT_TYP
 
     session_id = int(query.data.split(":")[1])
     telegram_id = update.effective_user.id
+    logger.info("confirm_end_callback fired: session=%d, user=%d, chat=%d", session_id, telegram_id, update.effective_chat.id)
 
     try:
         async with session_factory() as session:
@@ -423,36 +424,36 @@ async def _fallback_to_relay(context, session_id: int, patient_user, doctor_tg_i
 
 
 async def _cleanup_room(bot, room_id: int, patient_tg_id: int | None, doctor_tg_id: int | None) -> None:
-    """Revoke invite links, delete messages, and kick users from a consultation room."""
+    """Delete messages, kick users, and revoke invite links for a consultation room."""
     import asyncio
 
-    # Revoke all non-primary invite links
-    try:
-        chat = await bot.get_chat(room_id)
-        # Revoke the primary invite link by exporting a new one
-        await bot.export_chat_invite_link(room_id)
-    except Exception as exc:
-        logger.warning("Room cleanup — could not revoke invite links for %s: %s", room_id, exc)
-
-    # Delete recent messages (Telegram allows deleting messages < 48h old)
+    # Step 1: DELETE MESSAGES FIRST (before kicking — bot needs members present)
     deleted = 0
     try:
-        probe = await bot.send_message(chat_id=room_id, text="🧹 Cleaning room...")
+        probe = await bot.send_message(chat_id=room_id, text="🧹")
         probe_id = probe.message_id
 
+        # Build list of message IDs to delete (skip 1 — often undeletable system msg)
+        all_ids = list(range(2, probe_id + 1))
+
         # Delete in batches of 100 (Telegram limit)
-        batch = list(range(max(1, probe_id - 200), probe_id + 1))
-        for i in range(0, len(batch), 100):
-            chunk = batch[i:i + 100]
+        for i in range(0, len(all_ids), 100):
+            chunk = all_ids[i:i + 100]
             try:
                 await bot.delete_messages(chat_id=room_id, message_ids=chunk)
                 deleted += len(chunk)
             except Exception:
-                pass
+                # If batch fails, try smaller chunks
+                for msg_id in chunk:
+                    try:
+                        await bot.delete_message(chat_id=room_id, message_id=msg_id)
+                        deleted += 1
+                    except Exception:
+                        pass
     except Exception as exc:
         logger.warning("Room cleanup — could not delete messages in %s: %s", room_id, exc)
 
-    # Kick patient
+    # Step 2: KICK USERS (after messages are deleted)
     if patient_tg_id:
         try:
             await bot.ban_chat_member(chat_id=room_id, user_id=patient_tg_id)
@@ -462,7 +463,6 @@ async def _cleanup_room(bot, room_id: int, patient_tg_id: int | None, doctor_tg_
         except Exception as exc:
             logger.warning("Could not kick patient %s from room %s: %s", patient_tg_id, room_id, exc)
 
-    # Kick doctor
     if doctor_tg_id:
         try:
             await bot.ban_chat_member(chat_id=room_id, user_id=doctor_tg_id)
@@ -471,6 +471,12 @@ async def _cleanup_room(bot, room_id: int, patient_tg_id: int | None, doctor_tg_
             logger.info("Kicked doctor %s from room %s", doctor_tg_id, room_id)
         except Exception as exc:
             logger.warning("Could not kick doctor %s from room %s: %s", doctor_tg_id, room_id, exc)
+
+    # Step 3: Revoke invite links
+    try:
+        await bot.export_chat_invite_link(room_id)
+    except Exception as exc:
+        logger.warning("Room cleanup — could not revoke invite links for %s: %s", room_id, exc)
 
     logger.info("Room %s cleaned up (%d messages deleted)", room_id, deleted)
 
