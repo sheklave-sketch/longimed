@@ -103,17 +103,102 @@ async def help_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> No
 # ── /end ──────────────────────────────────────────────────────────────────
 
 async def end_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
-    """End the user's active consultation session. Only works in bot DM."""
+    """End the user's active consultation session. Works in bot DM and group rooms."""
     lang = context.user_data.get("lang", "en")
     telegram_id = update.effective_user.id
-
-    # /end only works in private chat with the bot
-    if update.effective_chat.type in ("group", "supergroup"):
-        await update.message.reply_text("Please use /end in your private chat with the bot.")
-        return
+    in_group = update.effective_chat.type in ("group", "supergroup")
+    group_chat_id = update.effective_chat.id if in_group else None
 
     try:
         async with session_factory() as session:
+            # If in a group room, find the session for this room directly
+            if in_group:
+                s_result = await session.execute(
+                    select(ConsultSession).where(
+                        ConsultSession.group_chat_id == group_chat_id,
+                        ConsultSession.status == SessionStatus.ACTIVE,
+                    )
+                )
+                room_session = s_result.scalar_one_or_none()
+                if not room_session:
+                    await update.message.reply_text("No active session in this room.")
+                    return
+
+                # Figure out who typed /end
+                doc_result = await session.execute(
+                    select(Doctor).where(Doctor.telegram_id == telegram_id)
+                )
+                doctor = doc_result.scalar_one_or_none()
+
+                is_doctor_ending = doctor and doctor.id == room_session.doctor_id
+                patient_user = await session.get(User, room_session.user_id)
+                doctor_obj = await session.get(Doctor, room_session.doctor_id) if room_session.doctor_id else None
+
+                if is_doctor_ending:
+                    room_session.resolution_confirmed_by_doctor = True
+                    who_ended = f"Dr. {doctor_obj.full_name}" if doctor_obj else "The doctor"
+                else:
+                    room_session.resolution_confirmed_by_patient = True
+                    who_ended = "The patient"
+
+                both_confirmed = (
+                    room_session.resolution_confirmed_by_doctor
+                    and room_session.resolution_confirmed_by_patient
+                )
+
+                if both_confirmed:
+                    room_session.status = SessionStatus.RESOLVED
+                    room_session.ended_at = datetime.now(timezone.utc)
+                    session_id = room_session.id
+                    await session.commit()
+
+                    await update.message.reply_text(
+                        "✅ *Session ended*\n\n"
+                        "Both parties confirmed. Cleaning up room...",
+                        parse_mode="Markdown",
+                    )
+
+                    await _cleanup_room(
+                        context.bot, group_chat_id,
+                        patient_user.telegram_id if patient_user else None,
+                        doctor_obj.telegram_id if doctor_obj else None,
+                    )
+
+                    # Send rating to patient in DM
+                    if patient_user:
+                        try:
+                            followup_kb = InlineKeyboardMarkup([
+                                [InlineKeyboardButton(
+                                    f"{'⭐' * i}", callback_data=f"rate:{session_id}:{i}"
+                                ) for i in range(1, 6)],
+                                [InlineKeyboardButton(
+                                    "💬 Send Follow-Up Message",
+                                    callback_data=f"session_followup:{session_id}",
+                                )],
+                            ])
+                            await context.bot.send_message(
+                                chat_id=patient_user.telegram_id,
+                                text="Your session has been resolved.\n\nPlease rate your experience:",
+                                reply_markup=followup_kb,
+                            )
+                        except Exception as exc:
+                            logger.error("Failed to send rating to patient: %s", exc)
+                else:
+                    await session.commit()
+                    confirm_kb = InlineKeyboardMarkup([
+                        [InlineKeyboardButton(
+                            "✅ Confirm End Session",
+                            callback_data=f"confirm_end:{room_session.id}",
+                        )],
+                    ])
+                    await update.message.reply_text(
+                        f"⏹ {who_ended} has requested to end this session.\n\n"
+                        f"The other party should tap the button below to confirm.",
+                        reply_markup=confirm_kb,
+                    )
+                return
+
+            # ── Private chat /end flow ──
             # Check if user is a doctor
             doc_result = await session.execute(
                 select(Doctor).where(Doctor.telegram_id == telegram_id)
