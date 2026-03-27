@@ -103,181 +103,205 @@ async def help_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> No
 # ── /end ──────────────────────────────────────────────────────────────────
 
 async def end_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
-    """End the user's active consultation session."""
+    """End the user's active consultation session. Works in both private chat and group rooms."""
     lang = context.user_data.get("lang", "en")
     telegram_id = update.effective_user.id
+    in_group = update.effective_chat.type in ("group", "supergroup")
+    chat_id = update.effective_chat.id
 
     try:
         async with session_factory() as session:
+            # If in a group, find the session for this room
+            if in_group:
+                s_result = await session.execute(
+                    select(ConsultSession).where(
+                        ConsultSession.group_chat_id == chat_id,
+                        ConsultSession.status == SessionStatus.ACTIVE,
+                    )
+                )
+                active_session = s_result.scalar_one_or_none()
+                if not active_session:
+                    await update.message.reply_text("No active session in this room.")
+                    return
+            else:
+                active_session = None
+
             # Check if user is a doctor
             doc_result = await session.execute(
                 select(Doctor).where(Doctor.telegram_id == telegram_id)
             )
             doctor = doc_result.scalar_one_or_none()
 
+            is_doctor_ending = False
+
             if doctor:
-                # Find active session as doctor
-                s_result = await session.execute(
-                    select(ConsultSession).where(
-                        ConsultSession.doctor_id == doctor.id,
-                        ConsultSession.status == SessionStatus.ACTIVE,
+                if not active_session:
+                    s_result = await session.execute(
+                        select(ConsultSession).where(
+                            ConsultSession.doctor_id == doctor.id,
+                            ConsultSession.status == SessionStatus.ACTIVE,
+                        )
                     )
-                )
-                active_session = s_result.scalar_one_or_none()
+                    active_session = s_result.scalar_one_or_none()
 
                 if not active_session:
                     await update.message.reply_text(
                         "No active session found.",
-                        reply_markup=back_btn,
+                        reply_markup=None if in_group else back_btn,
                     )
                     return
 
+                # Verify this doctor owns the session
+                if active_session.doctor_id == doctor.id:
+                    is_doctor_ending = True
+
+            if not is_doctor_ending:
+                # User is a patient (or doctor ending as patient — shouldn't happen)
+                if not active_session:
+                    user_result = await session.execute(
+                        select(User).where(User.telegram_id == telegram_id)
+                    )
+                    user = user_result.scalar_one_or_none()
+                    if not user:
+                        await update.message.reply_text(
+                            "No active session found.",
+                            reply_markup=None if in_group else back_btn,
+                        )
+                        return
+
+                    s_result = await session.execute(
+                        select(ConsultSession).where(
+                            ConsultSession.user_id == user.id,
+                            ConsultSession.status == SessionStatus.ACTIVE,
+                        )
+                    )
+                    active_session = s_result.scalar_one_or_none()
+
+                if not active_session:
+                    await update.message.reply_text(
+                        "No active session found.",
+                        reply_markup=None if in_group else back_btn,
+                    )
+                    return
+
+            # Now we have active_session and know who is ending
+            room_id = active_session.group_chat_id
+            session_id = active_session.id
+            patient_user = await session.get(User, active_session.user_id)
+            doctor_obj = await session.get(Doctor, active_session.doctor_id) if active_session.doctor_id else None
+
+            if is_doctor_ending:
                 active_session.resolution_confirmed_by_doctor = True
-
-                if active_session.resolution_confirmed_by_patient:
-                    # Both confirmed — resolve
-                    active_session.status = SessionStatus.RESOLVED
-                    active_session.ended_at = datetime.now(timezone.utc)
-                    session_id = active_session.id
-                    room_id = active_session.group_chat_id
-                    patient_user = await session.get(User, active_session.user_id)
-                    await session.commit()
-
-                    await update.message.reply_text(
-                        "Session resolved. Thank you!",
-                        reply_markup=back_btn,
-                    )
-
-                    # Clean up consultation room
-                    if room_id:
-                        await _cleanup_room(
-                            context.bot, room_id,
-                            patient_user.telegram_id if patient_user else None,
-                            telegram_id,
-                        )
-
-                    # Send rating + follow-up option to patient
-                    if patient_user:
-                        try:
-                            followup_kb = InlineKeyboardMarkup([
-                                [InlineKeyboardButton(
-                                    f"{'⭐' * i}", callback_data=f"rate:{session_id}:{i}"
-                                ) for i in range(1, 6)],
-                                [InlineKeyboardButton(
-                                    "💬 Send Follow-Up Message",
-                                    callback_data=f"session_followup:{session_id}",
-                                )],
-                            ])
-                            await context.bot.send_message(
-                                chat_id=patient_user.telegram_id,
-                                text="Your session has been resolved.\n\nPlease rate your experience, or send a follow-up message if you have additional questions:",
-                                reply_markup=followup_kb,
-                            )
-                        except Exception as exc:
-                            logger.error("Failed to send rating to patient: %s", exc)
-                else:
-                    patient_user = await session.get(User, active_session.user_id)
-                    await session.commit()
-
-                    await update.message.reply_text(
-                        "You've confirmed the session is complete. Waiting for the patient to confirm.",
-                        reply_markup=back_btn,
-                    )
-
-                    # Notify patient
-                    if patient_user:
-                        try:
-                            await context.bot.send_message(
-                                chat_id=patient_user.telegram_id,
-                                text="Your doctor has marked the session as complete. Use /end to confirm, or continue the conversation.",
-                            )
-                        except Exception as exc:
-                            logger.error("Failed to notify patient: %s", exc)
+                who_ended = f"Dr. {doctor_obj.full_name}" if doctor_obj else "The doctor"
+                other_role = "patient"
             else:
-                # User is a patient
-                user_result = await session.execute(
-                    select(User).where(User.telegram_id == telegram_id)
-                )
-                user = user_result.scalar_one_or_none()
-
-                if not user:
-                    await update.message.reply_text(
-                        "No active session found.",
-                        reply_markup=back_btn,
-                    )
-                    return
-
-                s_result = await session.execute(
-                    select(ConsultSession).where(
-                        ConsultSession.user_id == user.id,
-                        ConsultSession.status == SessionStatus.ACTIVE,
-                    )
-                )
-                active_session = s_result.scalar_one_or_none()
-
-                if not active_session:
-                    await update.message.reply_text(
-                        "No active session found.",
-                        reply_markup=back_btn,
-                    )
-                    return
-
                 active_session.resolution_confirmed_by_patient = True
+                who_ended = "The patient"
+                other_role = "doctor"
 
-                if active_session.resolution_confirmed_by_doctor:
-                    # Both confirmed — resolve
-                    active_session.status = SessionStatus.RESOLVED
-                    active_session.ended_at = datetime.now(timezone.utc)
-                    session_id = active_session.id
-                    room_id = active_session.group_chat_id
-                    doctor_obj = await session.get(Doctor, active_session.doctor_id) if active_session.doctor_id else None
-                    await session.commit()
+            both_confirmed = (
+                active_session.resolution_confirmed_by_doctor
+                and active_session.resolution_confirmed_by_patient
+            )
 
-                    # Clean up consultation room
-                    if room_id:
-                        await _cleanup_room(
-                            context.bot, room_id,
-                            telegram_id,
-                            doctor_obj.telegram_id if doctor_obj else None,
+            if both_confirmed:
+                # ── Both confirmed — resolve session ──
+                active_session.status = SessionStatus.RESOLVED
+                active_session.ended_at = datetime.now(timezone.utc)
+                await session.commit()
+
+                # Notify in the group room
+                if room_id:
+                    try:
+                        await context.bot.send_message(
+                            chat_id=room_id,
+                            text=(
+                                "✅ *Session ended*\n\n"
+                                "Both parties have confirmed. This room will now be cleaned up.\n"
+                                "All messages will be deleted and participants removed.\n\n"
+                                "Thank you for using LongiMed!"
+                            ),
+                            parse_mode="Markdown",
                         )
+                    except Exception:
+                        pass
 
-                    followup_kb = InlineKeyboardMarkup([
-                        [InlineKeyboardButton(
-                            f"{'⭐' * i}", callback_data=f"rate:{session_id}:{i}"
-                        ) for i in range(1, 6)],
-                        [InlineKeyboardButton(
-                            "💬 Send Follow-Up Message",
-                            callback_data=f"session_followup:{session_id}",
-                        )],
-                    ])
-                    await update.message.reply_text(
-                        "Session resolved.\n\nPlease rate your experience, or send a follow-up if needed:",
-                        reply_markup=followup_kb,
-                    )
-                else:
-                    doctor_obj = await session.get(Doctor, active_session.doctor_id) if active_session.doctor_id else None
-                    await session.commit()
+                # Reply to the person who sent /end
+                await update.message.reply_text("Session resolved. Thank you!")
 
-                    await update.message.reply_text(
-                        "You've confirmed the session is complete. Waiting for the doctor to confirm.",
-                        reply_markup=back_btn,
+                # Clean up room
+                if room_id:
+                    await _cleanup_room(
+                        context.bot, room_id,
+                        patient_user.telegram_id if patient_user else None,
+                        doctor_obj.telegram_id if doctor_obj else None,
                     )
 
-                    # Notify doctor
-                    if doctor_obj:
-                        try:
-                            await context.bot.send_message(
-                                chat_id=doctor_obj.telegram_id,
-                                text="Your patient has marked the session as complete. Use /end to confirm, or continue the conversation.",
-                            )
-                        except Exception as exc:
-                            logger.error("Failed to notify doctor: %s", exc)
+                # Send rating to patient (in private chat)
+                if patient_user:
+                    try:
+                        followup_kb = InlineKeyboardMarkup([
+                            [InlineKeyboardButton(
+                                f"{'⭐' * i}", callback_data=f"rate:{session_id}:{i}"
+                            ) for i in range(1, 6)],
+                            [InlineKeyboardButton(
+                                "💬 Send Follow-Up Message",
+                                callback_data=f"session_followup:{session_id}",
+                            )],
+                        ])
+                        await context.bot.send_message(
+                            chat_id=patient_user.telegram_id,
+                            text="Your session has been resolved.\n\nPlease rate your experience:",
+                            reply_markup=followup_kb,
+                        )
+                    except Exception as exc:
+                        logger.error("Failed to send rating to patient: %s", exc)
+
+            else:
+                # ── First /end — waiting for the other party ──
+                await session.commit()
+
+                await update.message.reply_text(
+                    f"You've confirmed the session is complete. Waiting for the {other_role} to confirm."
+                )
+
+                # Notify in the group room
+                if room_id:
+                    try:
+                        await context.bot.send_message(
+                            chat_id=room_id,
+                            text=(
+                                f"⏹ {who_ended} has requested to end the session.\n\n"
+                                f"The {other_role} should type /end to confirm, "
+                                f"or continue the conversation."
+                            ),
+                        )
+                    except Exception:
+                        pass
+
+                # Also notify in private chat
+                if is_doctor_ending and patient_user:
+                    try:
+                        await context.bot.send_message(
+                            chat_id=patient_user.telegram_id,
+                            text="Your doctor has requested to end the session. Type /end to confirm, or continue chatting.",
+                        )
+                    except Exception:
+                        pass
+                elif not is_doctor_ending and doctor_obj and doctor_obj.telegram_id:
+                    try:
+                        await context.bot.send_message(
+                            chat_id=doctor_obj.telegram_id,
+                            text="Your patient has requested to end the session. Type /end to confirm, or continue chatting.",
+                        )
+                    except Exception:
+                        pass
 
     except Exception as exc:
         logger.error("Error in /end command: %s", exc, exc_info=True)
         await update.message.reply_text(
             "Something went wrong. Please try again.",
-            reply_markup=back_btn,
+            reply_markup=None if in_group else back_btn,
         )
 
 
@@ -463,11 +487,20 @@ async def accept_session_callback(update: Update, context: ContextTypes.DEFAULT_
                     await context.bot.send_message(
                         chat_id=room_id,
                         text=(
-                            f"🩺 Consultation Session #{session_id}\n\n"
-                            f"Doctor: Dr. {doctor_name}\n"
-                            f"Topic: {issue_desc}\n\n"
-                            f"Chat directly here. Use /end in the bot when done."
+                            f"🩺 *Consultation Session #{session_id}*\n\n"
+                            f"👨‍⚕️ *Doctor:* Dr. {doctor_name}\n"
+                            f"📋 *Topic:* {issue_desc}\n\n"
+                            f"━━━━━━━━━━━━━━━━━━━━━━\n"
+                            f"📌 *Session Rules:*\n"
+                            f"• Text, voice messages, photos & documents are allowed\n"
+                            f"• 📹 The doctor may initiate a video call if needed\n"
+                            f"• Be respectful and share only relevant medical information\n"
+                            f"• Do NOT share payment or banking details here\n\n"
+                            f"⏹ Type /end when the session is complete\n"
+                            f"🔒 All messages will be deleted and you will be "
+                            f"removed from this room once the session ends."
                         ),
+                        parse_mode="Markdown",
                     )
 
                     room_kb = InlineKeyboardMarkup([
