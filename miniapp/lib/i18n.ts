@@ -1,0 +1,432 @@
+/**
+ * Mini App i18n — supports "en" and "am" (Amharic).
+ * Language detected from Telegram WebApp user's language_code,
+ * falling back to "en". Add more languages by extending `dictionaries`.
+ */
+
+import { getTelegramUser } from "./telegram";
+
+type Dict = Record<string, string>;
+
+const en: Dict = {
+  // ── Common ──
+  back: "Back",
+  loading: "Loading...",
+  continue: "Continue →",
+  review: "Review →",
+  confirm: "Confirm",
+  cancel: "Cancel",
+  yes: "Yes",
+  no: "No",
+  search_placeholder: "Search...",
+  no_results: "No results found",
+
+  // ── Header / Nav ──
+  nav_doctors: "Doctors",
+  nav_qa: "Q&A",
+  nav_book: "Book",
+  nav_dashboard: "Dashboard",
+  nav_admin: "Admin",
+
+  // ── Home ──
+  home_title: "LongiMed",
+  home_subtitle: "Ethiopian healthcare at your fingertips",
+  home_step1_title: "Ask a Question",
+  home_step1_desc: "Post a health question for our verified doctors",
+  home_step2_title: "Book a Consultation",
+  home_step2_desc: "Private session with a verified doctor",
+  home_step3_title: "Get Expert Care",
+  home_step3_desc: "Receive personalized medical guidance",
+  home_service_qa: "Public Q&A",
+  home_service_qa_desc: "Free community health answers",
+  home_service_consult: "Private Consultation",
+  home_service_consult_desc: "1-on-1 session with a doctor",
+  home_service_emergency: "Emergency Guidance",
+  home_service_emergency_desc: "Immediate emergency information",
+  home_browse_doctors: "Browse Doctors",
+  home_view_qa: "View Q&A",
+  home_book_session: "Book Session",
+
+  // ── Book ──
+  book_title: "Book Consultation",
+  book_subtitle: "Private session with a verified doctor",
+  book_step_package: "Package",
+  book_step_specialty: "Specialty",
+  book_step_doctor: "Doctor",
+  book_step_issue: "Describe Your Issue",
+  book_step_privacy: "Privacy",
+  book_step_review: "Review",
+  book_free_trial: "Free Trial",
+  book_free_trial_desc: "15-minute session to try the service",
+  book_free_label: "FREE",
+  book_single: "Single Session",
+  book_single_desc: "30-minute full consultation",
+  book_single_price: "500 ETB",
+  book_issue_placeholder: "Briefly describe what you need help with...",
+  book_anonymous: "Stay anonymous",
+  book_anonymous_desc: "Messages relayed through the bot",
+  book_continue_no_anon: "Continue without anonymous →",
+  book_no_doctors: "No available doctors in this specialty right now.",
+  book_new: "New",
+  book_available: "Available",
+  book_confirm_free: "Confirm Booking",
+  book_confirm_paid: "Confirm & Pay 500 ETB",
+  book_booking: "Booking...",
+  book_label_package: "Package",
+  book_label_specialty: "Specialty",
+  book_label_doctor: "Doctor",
+  book_label_anonymous: "Anonymous",
+  book_label_issue: "Issue",
+  book_alert_tg: "Please open this app from Telegram.",
+  book_alert_fail: "Failed to book session. Please try again.",
+
+  // ── Book Success ──
+  book_success_payment_title: "Payment Required",
+  book_success_session_title: "Session Requested!",
+  book_success_transfer: "Please transfer {amount} to complete your booking.",
+  book_success_bank_title: "Bank Details",
+  book_success_bank: "Bank:",
+  book_success_account: "Account:",
+  book_success_name: "Name:",
+  book_success_bank_value: "Commercial Bank of Ethiopia",
+  book_success_account_value: "1000XXXXXXXXX",
+  book_success_name_value: "LongiMed Health",
+  book_success_receipt: "Send your payment receipt to the bot. We'll confirm within 1 hour.",
+  book_success_awaiting: "Awaiting doctor confirmation. You'll be notified when the session starts.",
+  book_success_view: "View My Sessions",
+
+  // ── Sessions ──
+  sessions_title: "My Sessions",
+  sessions_subtitle: "Your consultation history",
+  sessions_empty: "No sessions yet",
+  sessions_empty_sub: "Book a consultation with a doctor to get started",
+  sessions_count: "{count} sessions",
+  sessions_anonymous: "Anonymous",
+  status_active: "Active",
+  status_resolved: "Resolved",
+  status_awaiting: "Awaiting",
+  status_pending: "Pending",
+  status_approved: "Approved",
+  status_cancelled: "Cancelled",
+  status_expired: "Expired",
+  pkg_free: "Free",
+
+  // ── Doctor Directory ──
+  doctors_title: "Our Doctors",
+  doctors_subtitle: "Verified Ethiopian physicians",
+  doctors_search: "Search doctors...",
+  doctors_all: "All",
+  doctors_no_results: "No doctors found",
+  doctors_no_match: "No matches for \"{query}\"",
+  doctors_no_specialty: "No doctors in this specialty yet",
+
+  // ── Doctor Profile ──
+  doc_not_found: "Doctor not found",
+  doc_available: "Available for consultations",
+  doc_unavailable: "Currently unavailable",
+  doc_languages: "Languages",
+  doc_license: "License",
+  doc_about: "About",
+  doc_reviews: "Reviews",
+  doc_book: "Book Consultation →",
+  doc_book_unavailable: "Currently Unavailable",
+
+  // ── Register ──
+  reg_title: "Doctor Registration",
+  reg_subtitle: "Join our network of verified physicians",
+  reg_success_title: "Application Submitted!",
+  reg_success_desc: "We'll review your application within 48 hours. You'll receive a notification once approved.",
+  reg_full_name: "Full Name",
+  reg_license: "License Number",
+  reg_specialty: "Specialty",
+  reg_languages: "Languages",
+  reg_bio: "Bio",
+  reg_submit: "Submit Application",
+  reg_submitting: "Submitting...",
+
+  // ── Q&A ──
+  qa_title: "Health Q&A",
+  qa_subtitle: "Questions answered by verified doctors",
+  qa_ask: "Ask a Question",
+  qa_no_questions: "No questions yet",
+  qa_no_questions_sub: "Be the first to ask a health question",
+  qa_answered: "Answered",
+  qa_pending: "Pending",
+
+  // ── Home (marketing) ──
+  home_available_now: "Doctors available now",
+  home_hero_title: "Your health, one tap away",
+  home_hero_desc: "Connect with verified Ethiopian doctors for free Q&A, private consultations, and emergency guidance — all through Telegram.",
+  home_browse: "Browse Doctors",
+  home_book_now: "Book Now",
+  home_verified: "Verified",
+  home_available: "Available",
+  home_free_qa: "Q&A",
+  home_how_title: "How It Works",
+  home_how_subtitle: "Three steps to better health",
+  home_step1_full: "Post your health question anonymously. Our verified doctors answer on the public Q&A channel — free for everyone.",
+  home_step2_full: "Need privacy? Book a 1-on-1 session with any available doctor. Choose anonymous relay or a private consultation room.",
+  home_step3_full: "Receive personalized medical guidance from licensed Ethiopian doctors. Follow up until your concern is resolved.",
+  home_services_title: "Services",
+  home_services_subtitle: "Care that fits your needs",
+  home_qa_full: "Free community health answers from verified doctors. Ask anything, stay anonymous.",
+  home_consult_full: "Confidential 1-on-1 sessions. Choose your doctor, describe your issue, get dedicated care.",
+  home_emergency_full: "Chest pain? Difficulty breathing? Our bot instantly connects you with emergency numbers and nearest hospitals.",
+  home_from_price: "From 0 ETB",
+  home_24_7: "24/7",
+  home_packages_title: "Packages",
+  home_packages_subtitle: "Start free, upgrade anytime",
+  home_trial_desc: "Try a 15-minute session with any available doctor. No payment needed — just book and talk.",
+  home_single_desc: "Full 30-minute consultation with your chosen doctor. Follow-up included until your issue is resolved.",
+  home_15_min: "15 minutes",
+  home_30_min: "30 minutes",
+  home_one_time: "One-time trial",
+  home_followup_included: "Follow-up included",
+  home_popular: "POPULAR",
+  home_call_title: "Need to talk now?",
+  home_call_desc: "Our call center is available for urgent medical guidance.",
+  home_footer: "All doctors are licensed and verified by LongiMed.",
+  home_company: "LongiMed Health Services PLC",
+
+  // ── Specialties ──
+  spec_general: "General / GP",
+  spec_family_medicine: "Family Medicine",
+  spec_internal_medicine: "Internal Medicine",
+  spec_pediatrics: "Pediatrics",
+  spec_obgyn: "OB/GYN",
+  spec_surgery: "Surgery",
+  spec_orthopedics: "Orthopedics",
+  spec_dermatology: "Dermatology",
+  spec_mental_health: "Mental Health",
+  spec_cardiology: "Cardiology",
+  spec_neurology: "Neurology",
+  spec_ent: "ENT",
+  spec_ophthalmology: "Ophthalmology",
+  spec_other: "Other",
+};
+
+const am: Dict = {
+  // ── Common ──
+  back: "ተመለስ",
+  loading: "እየተጫነ ነው...",
+  continue: "ቀጥል →",
+  review: "ገምግም →",
+  confirm: "አረጋግጥ",
+  cancel: "ሰርዝ",
+  yes: "አዎ",
+  no: "አይ",
+  search_placeholder: "ፈልግ...",
+  no_results: "ውጤት አልተገኘም",
+
+  // ── Header / Nav ──
+  nav_doctors: "ዶክተሮች",
+  nav_qa: "ጥያቄ/መልስ",
+  nav_book: "ቀጠሮ",
+  nav_dashboard: "ዳሽቦርድ",
+  nav_admin: "አስተዳዳሪ",
+
+  // ── Home ──
+  home_title: "ሎንጊሜድ",
+  home_subtitle: "የኢትዮጵያ ጤና አገልግሎት በእጅዎ",
+  home_step1_title: "ጥያቄ ይጠይቁ",
+  home_step1_desc: "ለተመዘገቡ ዶክተሮች የጤና ጥያቄ ያቅርቡ",
+  home_step2_title: "ቀጠሮ ይያዙ",
+  home_step2_desc: "ከተመዘገበ ዶክተር ጋር የግል ምክክር",
+  home_step3_title: "ባለሙያ እንክብካቤ ያግኙ",
+  home_step3_desc: "ግላዊ የሕክምና መመሪያ ይቀበሉ",
+  home_service_qa: "የህዝብ ጥያቄ/መልስ",
+  home_service_qa_desc: "ነፃ የጤና መልሶች",
+  home_service_consult: "የግል ምክክር",
+  home_service_consult_desc: "ከዶክተር ጋር 1-ለ-1 ክፍለ ጊዜ",
+  home_service_emergency: "አስቸኳይ መመሪያ",
+  home_service_emergency_desc: "አፋጣኝ የአደጋ መረጃ",
+  home_browse_doctors: "ዶክተሮችን ይመልከቱ",
+  home_view_qa: "ጥያቄ/መልስ ይመልከቱ",
+  home_book_session: "ቀጠሮ ይያዙ",
+
+  // ── Book ──
+  book_title: "ቀጠሮ ይያዙ",
+  book_subtitle: "ከተመዘገበ ዶክተር ጋር የግል ክፍለ ጊዜ",
+  book_step_package: "ጥቅል",
+  book_step_specialty: "ስፔሻሊቲ",
+  book_step_doctor: "ዶክተር",
+  book_step_issue: "ችግርዎን ይግለጹ",
+  book_step_privacy: "ግላዊነት",
+  book_step_review: "ገምግም",
+  book_free_trial: "ነፃ ሙከራ",
+  book_free_trial_desc: "አገልግሎቱን ለመሞከር 15 ደቂቃ ክፍለ ጊዜ",
+  book_free_label: "ነፃ",
+  book_single: "ነጠላ ክፍለ ጊዜ",
+  book_single_desc: "30 ደቂቃ ሙሉ ምክክር",
+  book_single_price: "500 ብር",
+  book_issue_placeholder: "የሚያስፈልግዎትን በአጭሩ ይግለጹ...",
+  book_anonymous: "ማንነትዎ ይደበቅ",
+  book_anonymous_desc: "መልዕክቶች በቦቱ በኩል ይተላለፋሉ",
+  book_continue_no_anon: "ያለማንነት መደበቅ ቀጥል →",
+  book_no_doctors: "በዚህ ስፔሻሊቲ ውስጥ አሁን ምንም ዶክተር የለም።",
+  book_new: "አዲስ",
+  book_available: "ይገኛል",
+  book_confirm_free: "ቀጠሮ አረጋግጥ",
+  book_confirm_paid: "አረጋግጥ እና 500 ብር ይክፈሉ",
+  book_booking: "እየተያዘ ነው...",
+  book_label_package: "ጥቅል",
+  book_label_specialty: "ስፔሻሊቲ",
+  book_label_doctor: "ዶክተር",
+  book_label_anonymous: "ማንነት መደበቅ",
+  book_label_issue: "ችግር",
+  book_alert_tg: "እባክዎ ይህን መተግበሪያ ከቴሌግራም ይክፈቱ።",
+  book_alert_fail: "ቀጠሮ ማስያዝ አልተሳካም። እባክዎ እንደገና ይሞክሩ።",
+
+  // ── Book Success ──
+  book_success_payment_title: "ክፍያ ያስፈልጋል",
+  book_success_session_title: "ቀጠሮ ተጠይቋል!",
+  book_success_transfer: "ቀጠሮዎን ለማጠናቀቅ {amount} ያስተላልፉ።",
+  book_success_bank_title: "የባንክ ዝርዝሮች",
+  book_success_bank: "ባንክ:",
+  book_success_account: "አካውንት:",
+  book_success_name: "ስም:",
+  book_success_bank_value: "የኢትዮጵያ ንግድ ባንክ",
+  book_success_account_value: "1000XXXXXXXXX",
+  book_success_name_value: "ሎንጊሜድ ጤና",
+  book_success_receipt: "የክፍያ ደረሰኝዎን ወደ ቦቱ ይላኩ። በ1 ሰዓት ውስጥ እናረጋግጣለን።",
+  book_success_awaiting: "የዶክተር ማረጋገጫ በመጠበቅ ላይ። ክፍለ ጊዜው ሲጀመር ይነገርዎታል።",
+  book_success_view: "ቀጠሮዎቼን ይመልከቱ",
+
+  // ── Sessions ──
+  sessions_title: "ቀጠሮዎቼ",
+  sessions_subtitle: "የምክክር ታሪክዎ",
+  sessions_empty: "ገና ምንም ቀጠሮ የለም",
+  sessions_empty_sub: "ለመጀመር ከዶክተር ጋር ቀጠሮ ይያዙ",
+  sessions_count: "{count} ቀጠሮዎች",
+  sessions_anonymous: "ማንነት ተደብቋል",
+  status_active: "ንቁ",
+  status_resolved: "ተፈቷል",
+  status_awaiting: "በመጠበቅ ላይ",
+  status_pending: "በመጠበቅ ላይ",
+  status_approved: "ጸድቋል",
+  status_cancelled: "ተሰርዟል",
+  status_expired: "ጊዜው አልፏል",
+  pkg_free: "ነፃ",
+
+  // ── Doctor Directory ──
+  doctors_title: "ዶክተሮቻችን",
+  doctors_subtitle: "የተረጋገጡ የኢትዮጵያ ሐኪሞች",
+  doctors_search: "ዶክተሮችን ይፈልጉ...",
+  doctors_all: "ሁሉም",
+  doctors_no_results: "ዶክተር አልተገኘም",
+  doctors_no_match: "ለ\"{query}\" ምንም አልተገኘም",
+  doctors_no_specialty: "በዚህ ስፔሻሊቲ ገና ዶክተር የለም",
+
+  // ── Doctor Profile ──
+  doc_not_found: "ዶክተር አልተገኘም",
+  doc_available: "ለምክክር ይገኛል",
+  doc_unavailable: "በአሁኑ ጊዜ አይገኝም",
+  doc_languages: "ቋንቋዎች",
+  doc_license: "ፈቃድ",
+  doc_about: "ስለ",
+  doc_reviews: "ግምገማዎች",
+  doc_book: "ቀጠሮ ይያዙ →",
+  doc_book_unavailable: "በአሁኑ ጊዜ አይገኝም",
+
+  // ── Register ──
+  reg_title: "የዶክተር ምዝገባ",
+  reg_subtitle: "የተረጋገጡ ሐኪሞች ኔትወርካችንን ይቀላቀሉ",
+  reg_success_title: "ማመልከቻ ቀርቧል!",
+  reg_success_desc: "ማመልከቻዎን በ48 ሰዓት ውስጥ እንገመግማለን። ሲጸድቅ ይነገርዎታል።",
+  reg_full_name: "ሙሉ ስም",
+  reg_license: "የፈቃድ ቁጥር",
+  reg_specialty: "ስፔሻሊቲ",
+  reg_languages: "ቋንቋዎች",
+  reg_bio: "የግል መግለጫ",
+  reg_submit: "ማመልከቻ ያቅርቡ",
+  reg_submitting: "እየቀረበ ነው...",
+
+  // ── Q&A ──
+  qa_title: "የጤና ጥያቄ/መልስ",
+  qa_subtitle: "በተረጋገጡ ዶክተሮች የሚመለሱ ጥያቄዎች",
+  qa_ask: "ጥያቄ ይጠይቁ",
+  qa_no_questions: "ገና ምንም ጥያቄ የለም",
+  qa_no_questions_sub: "የጤና ጥያቄ ለመጠየቅ የመጀመሪያው ይሁኑ",
+  qa_answered: "ተመልሷል",
+  qa_pending: "በመጠበቅ ላይ",
+
+  // ── Home (marketing) ──
+  home_available_now: "ዶክተሮች አሁን ይገኛሉ",
+  home_hero_title: "ጤናዎ፣ በአንድ ጠቅ",
+  home_hero_desc: "ከተረጋገጡ የኢትዮጵያ ዶክተሮች ጋር ለነፃ ጥያቄ/መልስ፣ የግል ምክክር እና የአደጋ መመሪያ ይገናኙ — ሁሉም በቴሌግራም።",
+  home_browse: "ዶክተሮችን ይመልከቱ",
+  home_book_now: "አሁን ይያዙ",
+  home_verified: "የተረጋገጠ",
+  home_available: "ይገኛል",
+  home_free_qa: "ጥያቄ/መልስ",
+  home_how_title: "እንዴት ይሰራል",
+  home_how_subtitle: "ለተሻለ ጤና ሦስት ደረጃዎች",
+  home_step1_full: "የጤና ጥያቄዎን ማንነትዎን ደብቀው ያቅርቡ። የተረጋገጡ ዶክተሮቻችን በህዝባዊ ቻናል ይመልሳሉ — ለሁሉም ነፃ።",
+  home_step2_full: "ግላዊነት ይፈልጋሉ? ከማንኛውም ዶክተር ጋር 1-ለ-1 ክፍለ ጊዜ ይያዙ። ማንነት መደበቅ ወይም የግል ምክክር ክፍል ይምረጡ።",
+  home_step3_full: "ከተፈቀደላቸው የኢትዮጵያ ዶክተሮች ግላዊ የሕክምና መመሪያ ይቀበሉ። ችግርዎ እስኪፈታ ድረስ ይከታተሉ።",
+  home_services_title: "አገልግሎቶች",
+  home_services_subtitle: "ለፍላጎትዎ የሚስማማ እንክብካቤ",
+  home_qa_full: "ከተረጋገጡ ዶክተሮች ነፃ የጤና መልሶች። ማንኛውንም ነገር ይጠይቁ፣ ማንነትዎን ይደብቁ።",
+  home_consult_full: "ሚስጥራዊ 1-ለ-1 ክፍለ ጊዜዎች። ዶክተርዎን ይምረጡ፣ ችግርዎን ይግለጹ፣ ለየት ያለ እንክብካቤ ያግኙ።",
+  home_emergency_full: "የደረት ህመም? የመተንፈስ ችግር? ቦታችን ወዲያውኑ ከአደጋ ቁጥሮች እና በአቅራቢያ ካሉ ሆስፒታሎች ጋር ያገናኝዎታል።",
+  home_from_price: "ከ0 ብር ጀምሮ",
+  home_24_7: "24/7",
+  home_packages_title: "ጥቅሎች",
+  home_packages_subtitle: "በነፃ ይጀምሩ፣ በማንኛውም ጊዜ ያሻሽሉ",
+  home_trial_desc: "ከማንኛውም ዶክተር ጋር 15 ደቂቃ ክፍለ ጊዜ ይሞክሩ። ክፍያ አያስፈልግም — ቀጠሮ ይያዙና ያናግሩ።",
+  home_single_desc: "ከመረጡት ዶክተር ጋር 30 ደቂቃ ሙሉ ምክክር። ችግርዎ እስኪፈታ ድረስ ክትትል ይካተታል።",
+  home_15_min: "15 ደቂቃ",
+  home_30_min: "30 ደቂቃ",
+  home_one_time: "ለአንድ ጊዜ ሙከራ",
+  home_followup_included: "ክትትል ይካተታል",
+  home_popular: "ተወዳጅ",
+  home_call_title: "አሁን ማነጋገር ይፈልጋሉ?",
+  home_call_desc: "የጥሪ ማዕከላችን ለአስቸኳይ የሕክምና መመሪያ ይገኛል።",
+  home_footer: "ሁሉም ዶክተሮች በሎንጊሜድ ፈቃድ የተረጋገጡ ናቸው።",
+  home_company: "ሎንጊሜድ ጤና አገልግሎት ኃ/የተ/የግ/ማ",
+
+  // ── Specialties ──
+  spec_general: "ጠቅላላ ሐኪም",
+  spec_family_medicine: "የቤተሰብ ሕክምና",
+  spec_internal_medicine: "የውስጥ ደዌ",
+  spec_pediatrics: "የህጻናት ሕክምና",
+  spec_obgyn: "የማህጸን/ፅንስ",
+  spec_surgery: "ቀዶ ጥገና",
+  spec_orthopedics: "የአጥንት ሕክምና",
+  spec_dermatology: "የቆዳ ሕክምና",
+  spec_mental_health: "የአእምሮ ጤና",
+  spec_cardiology: "የልብ ሕክምና",
+  spec_neurology: "የነርቭ ሕክምና",
+  spec_ent: "ጆሮ/አፍንጫ/ጉሮሮ",
+  spec_ophthalmology: "የዓይን ሕክምና",
+  spec_other: "ሌላ",
+};
+
+const dictionaries: Record<string, Dict> = { en, am };
+
+/** Detect language from Telegram user or default to "en" */
+export function detectLang(): string {
+  const user = getTelegramUser();
+  const code = user?.language_code?.toLowerCase() || "en";
+  // Map Telegram language codes to our supported languages
+  if (code === "am" || code.startsWith("am")) return "am";
+  return "en";
+}
+
+/** Translate a key with optional interpolation: t("hello", { name: "X" }) */
+export function t(key: string, vars?: Record<string, string | number>): string {
+  const lang = detectLang();
+  const dict = dictionaries[lang] || dictionaries.en;
+  let text = dict[key] || dictionaries.en[key] || key;
+  if (vars) {
+    for (const [k, v] of Object.entries(vars)) {
+      text = text.replace(`{${k}}`, String(v));
+    }
+  }
+  return text;
+}
+
+/** Get the specialty label translated */
+export function specLabel(value: string): string {
+  return t(`spec_${value}`) || value.replace("_", " ");
+}

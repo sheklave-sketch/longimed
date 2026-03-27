@@ -7,27 +7,28 @@ import { useRouter, useSearchParams } from "next/navigation";
 import { initTelegram, getTelegramUser } from "@/lib/telegram";
 import { fetchDoctors, bookSession } from "@/lib/api";
 import type { Doctor } from "@/lib/api";
+import { t, specLabel } from "@/lib/i18n";
 
 const SPECIALTIES = [
-  { value: "general", label: "General / GP", icon: "🩺" },
-  { value: "family_medicine", label: "Family Medicine", icon: "👨‍👩‍👧‍👦" },
-  { value: "internal_medicine", label: "Internal Medicine", icon: "💊" },
-  { value: "pediatrics", label: "Pediatrics", icon: "👶" },
-  { value: "obgyn", label: "OB/GYN", icon: "🤰" },
-  { value: "surgery", label: "Surgery", icon: "🔪" },
-  { value: "orthopedics", label: "Orthopedics", icon: "🦴" },
-  { value: "dermatology", label: "Dermatology", icon: "🧴" },
-  { value: "mental_health", label: "Mental Health", icon: "🧠" },
-  { value: "cardiology", label: "Cardiology", icon: "❤️" },
-  { value: "neurology", label: "Neurology", icon: "🧬" },
-  { value: "ent", label: "ENT", icon: "👂" },
-  { value: "ophthalmology", label: "Ophthalmology", icon: "👁️" },
-  { value: "other", label: "Other", icon: "➕" },
+  { value: "general", icon: "🩺" },
+  { value: "family_medicine", icon: "👨‍👩‍👧‍👦" },
+  { value: "internal_medicine", icon: "💊" },
+  { value: "pediatrics", icon: "👶" },
+  { value: "obgyn", icon: "🤰" },
+  { value: "surgery", icon: "🔪" },
+  { value: "orthopedics", icon: "🦴" },
+  { value: "dermatology", icon: "🧴" },
+  { value: "mental_health", icon: "🧠" },
+  { value: "cardiology", icon: "❤️" },
+  { value: "neurology", icon: "🧬" },
+  { value: "ent", icon: "👂" },
+  { value: "ophthalmology", icon: "👁️" },
+  { value: "other", icon: "➕" },
 ];
 
 export default function BookPage() {
   return (
-    <Suspense fallback={<div className="p-8 text-center">Loading...</div>}>
+    <Suspense fallback={<div className="p-8 text-center">{t("loading")}</div>}>
       <BookConsultation />
     </Suspense>
   );
@@ -55,13 +56,12 @@ function BookConsultation() {
   useEffect(() => {
     initTelegram();
     if (preselectedDoctor) {
-      // If doctor pre-selected, load all doctors to find their specialty
       fetchDoctors().then((docs) => {
         setDoctors(docs);
         const doc = docs.find((d) => d.id === Number(preselectedDoctor));
         if (doc) {
           setSpecialty(doc.specialty);
-          setStep(4); // Skip to issue description
+          setStep(4);
         }
       });
     }
@@ -82,7 +82,7 @@ function BookConsultation() {
   const handleSubmit = async () => {
     const tgId = getTelegramUser()?.id;
     if (!tgId || !selectedDoctor) {
-      alert("Please open this app from Telegram.");
+      alert(t("book_alert_tg"));
       return;
     }
     setSubmitting(true);
@@ -98,7 +98,7 @@ function BookConsultation() {
       setSuccess(true);
       setIsPaid(pkg === "SINGLE");
     } catch {
-      alert("Failed to book session. Please try again.");
+      alert(t("book_alert_fail"));
     } finally {
       setSubmitting(false);
     }
@@ -116,35 +116,35 @@ function BookConsultation() {
             {isPaid ? "🏦" : "⏳"}
           </div>
           <h3 className="font-display font-bold text-ink-rich text-lg mb-1.5">
-            {isPaid ? "Payment Required" : "Session Requested!"}
+            {isPaid ? t("book_success_payment_title") : t("book_success_session_title")}
           </h3>
           {isPaid ? (
             <div className="mb-6">
               <p className="text-ink-secondary text-[14px] max-w-[300px] leading-relaxed mb-4">
-                Please transfer <span className="font-bold text-ink-rich">500 ETB</span> to complete your booking.
+                {t("book_success_transfer", { amount: "500 ETB" })}
               </p>
               <div className="card p-4 text-left mb-3">
-                <p className="text-[11px] font-semibold text-ink-muted uppercase tracking-[0.08em] mb-2">Bank Details</p>
+                <p className="text-[11px] font-semibold text-ink-muted uppercase tracking-[0.08em] mb-2">{t("book_success_bank_title")}</p>
                 <div className="space-y-1.5">
-                  <p className="text-[13px] text-ink-body"><span className="text-ink-muted">Bank:</span> Commercial Bank of Ethiopia</p>
-                  <p className="text-[13px] text-ink-body"><span className="text-ink-muted">Account:</span> 1000XXXXXXXXX</p>
-                  <p className="text-[13px] text-ink-body"><span className="text-ink-muted">Name:</span> LongiMed Health</p>
+                  <p className="text-[13px] text-ink-body"><span className="text-ink-muted">{t("book_success_bank")}</span> {t("book_success_bank_value")}</p>
+                  <p className="text-[13px] text-ink-body"><span className="text-ink-muted">{t("book_success_account")}</span> {t("book_success_account_value")}</p>
+                  <p className="text-[13px] text-ink-body"><span className="text-ink-muted">{t("book_success_name")}</span> {t("book_success_name_value")}</p>
                 </div>
               </div>
               <p className="text-[12px] text-ink-muted leading-relaxed">
-                Send your payment receipt to the bot. We&apos;ll confirm within 1 hour.
+                {t("book_success_receipt")}
               </p>
             </div>
           ) : (
             <p className="text-ink-secondary text-[14px] max-w-[280px] leading-relaxed mb-6">
-              Awaiting doctor confirmation. You&apos;ll be notified when the session starts.
+              {t("book_success_awaiting")}
             </p>
           )}
           <button
             onClick={() => router.push("/sessions")}
             className="bg-brand-teal text-white rounded-2xl px-6 py-3 font-display font-bold text-[14px] hover:bg-brand-teal-deep transition-colors"
           >
-            View My Sessions
+            {t("book_success_view")}
           </button>
         </motion.div>
       </div>
@@ -153,19 +153,18 @@ function BookConsultation() {
 
   return (
     <div className="pt-5 pb-8">
-      {/* Back */}
       <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }}>
         <Link href="/doctors" className="inline-flex items-center gap-1.5 text-[13px] text-ink-secondary hover:text-brand-teal transition-colors mb-5">
           <svg width="16" height="16" viewBox="0 0 16 16" fill="none"><path d="M10 4L6 8L10 12" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"/></svg>
-          Back
+          {t("back")}
         </Link>
       </motion.div>
 
       <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="mb-6">
         <h1 className="font-display font-bold text-[26px] text-ink-rich tracking-tight leading-tight mb-1">
-          Book Consultation
+          {t("book_title")}
         </h1>
-        <p className="text-ink-secondary text-[14px]">Private session with a verified doctor</p>
+        <p className="text-ink-secondary text-[14px]">{t("book_subtitle")}</p>
       </motion.div>
 
       {/* Step 1: Package */}
@@ -176,7 +175,7 @@ function BookConsultation() {
         className="mb-6"
       >
         <p className="text-[11px] font-semibold text-ink-muted uppercase tracking-[0.08em] mb-3">
-          Step 1 of 6 — Package
+          Step 1 of 6 — {t("book_step_package")}
         </p>
         <div className="space-y-2">
           <button
@@ -188,11 +187,11 @@ function BookConsultation() {
             <div className="flex items-center justify-between">
               <div>
                 <p className={`text-[15px] font-display font-bold ${pkg === "FREE_TRIAL" ? "text-brand-teal-deep" : "text-ink-rich"}`}>
-                  Free Trial
+                  {t("book_free_trial")}
                 </p>
-                <p className="text-[12px] text-ink-muted mt-0.5">15-minute session to try the service</p>
+                <p className="text-[12px] text-ink-muted mt-0.5">{t("book_free_trial_desc")}</p>
               </div>
-              <span className="text-[13px] font-bold text-emerald-600 bg-emerald-50 px-3 py-1 rounded-xl">FREE</span>
+              <span className="text-[13px] font-bold text-emerald-600 bg-emerald-50 px-3 py-1 rounded-xl">{t("book_free_label")}</span>
             </div>
           </button>
           <button
@@ -204,11 +203,11 @@ function BookConsultation() {
             <div className="flex items-center justify-between">
               <div>
                 <p className={`text-[15px] font-display font-bold ${pkg === "SINGLE" ? "text-brand-teal-deep" : "text-ink-rich"}`}>
-                  Single Session
+                  {t("book_single")}
                 </p>
-                <p className="text-[12px] text-ink-muted mt-0.5">30-minute full consultation</p>
+                <p className="text-[12px] text-ink-muted mt-0.5">{t("book_single_desc")}</p>
               </div>
-              <span className="text-[13px] font-bold text-brand-gold bg-brand-gold-light px-3 py-1 rounded-xl">500 ETB</span>
+              <span className="text-[13px] font-bold text-brand-gold bg-brand-gold-light px-3 py-1 rounded-xl">{t("book_single_price")}</span>
             </div>
           </button>
         </div>
@@ -222,7 +221,7 @@ function BookConsultation() {
           className="mb-6"
         >
           <p className="text-[11px] font-semibold text-ink-muted uppercase tracking-[0.08em] mb-3">
-            Step 2 of 6 — Specialty
+            Step 2 of 6 — {t("book_step_specialty")}
           </p>
           <div className="grid grid-cols-2 gap-2">
             {SPECIALTIES.map((spec) => (
@@ -235,7 +234,7 @@ function BookConsultation() {
               >
                 <span className="text-lg">{spec.icon}</span>
                 <p className={`text-[13px] font-semibold mt-1 ${specialty === spec.value ? "text-brand-teal-deep" : "text-ink-rich"}`}>
-                  {spec.label}
+                  {specLabel(spec.value)}
                 </p>
               </button>
             ))}
@@ -251,7 +250,7 @@ function BookConsultation() {
           className="mb-6"
         >
           <p className="text-[11px] font-semibold text-ink-muted uppercase tracking-[0.08em] mb-3">
-            Step 3 of 6 — Doctor
+            Step 3 of 6 — {t("book_step_doctor")}
           </p>
           {loadingDoctors ? (
             <div className="space-y-2">
@@ -289,9 +288,9 @@ function BookConsultation() {
                         </p>
                         <div className="flex items-center gap-2 mt-0.5">
                           <span className="text-[12px] text-ink-secondary">
-                            {doc.rating_avg > 0 ? `★ ${doc.rating_avg}` : "New"}
+                            {doc.rating_avg > 0 ? `★ ${doc.rating_avg}` : t("book_new")}
                           </span>
-                          <span className="text-[11px] text-emerald-600 font-semibold">Available</span>
+                          <span className="text-[11px] text-emerald-600 font-semibold">{t("book_available")}</span>
                         </div>
                       </div>
                     </div>
@@ -301,7 +300,7 @@ function BookConsultation() {
             </div>
           ) : (
             <div className="card p-6 text-center">
-              <p className="text-ink-muted text-[13px]">No available doctors in this specialty right now.</p>
+              <p className="text-ink-muted text-[13px]">{t("book_no_doctors")}</p>
             </div>
           )}
         </motion.div>
@@ -315,12 +314,12 @@ function BookConsultation() {
           className="mb-6"
         >
           <p className="text-[11px] font-semibold text-ink-muted uppercase tracking-[0.08em] mb-3">
-            Step {preselectedDoctor ? "2 of 4" : "4 of 6"} — Describe Your Issue
+            Step {preselectedDoctor ? "2 of 4" : "4 of 6"} — {t("book_step_issue")}
           </p>
           <textarea
             value={issueDescription}
             onChange={(e) => setIssueDescription(e.target.value)}
-            placeholder="Briefly describe what you need help with..."
+            placeholder={t("book_issue_placeholder")}
             rows={4}
             className="w-full bg-surface-white border border-surface-border rounded-2xl px-4 py-3 text-[14px] text-ink-rich placeholder:text-ink-faint focus:outline-none focus:border-brand-teal focus:ring-2 focus:ring-brand-teal/10 transition-all resize-none"
           />
@@ -329,7 +328,7 @@ function BookConsultation() {
               onClick={() => setStep(5)}
               className="mt-2 text-[13px] text-brand-teal font-semibold hover:text-brand-teal-deep transition-colors"
             >
-              Continue →
+              {t("continue")}
             </button>
           )}
         </motion.div>
@@ -343,7 +342,7 @@ function BookConsultation() {
           className="mb-6"
         >
           <p className="text-[11px] font-semibold text-ink-muted uppercase tracking-[0.08em] mb-3">
-            Step {preselectedDoctor ? "3 of 4" : "5 of 6"} — Privacy
+            Step {preselectedDoctor ? "3 of 4" : "5 of 6"} — {t("book_step_privacy")}
           </p>
           <div className="card p-4">
             <button
@@ -358,8 +357,8 @@ function BookConsultation() {
                 )}
               </div>
               <div className="text-left">
-                <p className="text-[14px] font-semibold text-ink-rich">Stay anonymous</p>
-                <p className="text-[12px] text-ink-muted">Messages relayed through the bot</p>
+                <p className="text-[14px] font-semibold text-ink-rich">{t("book_anonymous")}</p>
+                <p className="text-[12px] text-ink-muted">{t("book_anonymous_desc")}</p>
               </div>
             </button>
           </div>
@@ -368,7 +367,7 @@ function BookConsultation() {
               onClick={() => setStep(6)}
               className="mt-3 text-[13px] text-brand-teal font-semibold hover:text-brand-teal-deep transition-colors"
             >
-              Continue without anonymous →
+              {t("book_continue_no_anon")}
             </button>
           )}
         </motion.div>
@@ -382,33 +381,33 @@ function BookConsultation() {
           className="mb-6"
         >
           <p className="text-[11px] font-semibold text-ink-muted uppercase tracking-[0.08em] mb-3">
-            Step {preselectedDoctor ? "4 of 4" : "6 of 6"} — Review
+            Step {preselectedDoctor ? "4 of 4" : "6 of 6"} — {t("book_step_review")}
           </p>
           <div className="card p-4 mb-4 border-l-4 border-l-brand-teal">
             <div className="space-y-2">
               <div className="flex justify-between">
-                <span className="text-[12px] text-ink-muted">Package</span>
+                <span className="text-[12px] text-ink-muted">{t("book_label_package")}</span>
                 <span className="text-[13px] font-semibold text-ink-rich">
-                  {pkg === "FREE_TRIAL" ? "Free Trial" : "Single Session (500 ETB)"}
+                  {pkg === "FREE_TRIAL" ? t("book_free_trial") : `${t("book_single")} (${t("book_single_price")})`}
                 </span>
               </div>
               <div className="flex justify-between">
-                <span className="text-[12px] text-ink-muted">Specialty</span>
-                <span className="text-[13px] font-semibold text-ink-rich capitalize">{specialty.replace("_", " ")}</span>
+                <span className="text-[12px] text-ink-muted">{t("book_label_specialty")}</span>
+                <span className="text-[13px] font-semibold text-ink-rich">{specLabel(specialty)}</span>
               </div>
               {selectedDoctorObj && (
                 <div className="flex justify-between">
-                  <span className="text-[12px] text-ink-muted">Doctor</span>
+                  <span className="text-[12px] text-ink-muted">{t("book_label_doctor")}</span>
                   <span className="text-[13px] font-semibold text-ink-rich">Dr. {selectedDoctorObj.full_name}</span>
                 </div>
               )}
               <div className="flex justify-between">
-                <span className="text-[12px] text-ink-muted">Anonymous</span>
-                <span className="text-[13px] font-semibold text-ink-rich">{isAnonymous ? "Yes" : "No"}</span>
+                <span className="text-[12px] text-ink-muted">{t("book_label_anonymous")}</span>
+                <span className="text-[13px] font-semibold text-ink-rich">{isAnonymous ? t("yes") : t("no")}</span>
               </div>
               {issueDescription && (
                 <div className="pt-2 border-t border-surface-border">
-                  <span className="text-[12px] text-ink-muted">Issue</span>
+                  <span className="text-[12px] text-ink-muted">{t("book_label_issue")}</span>
                   <p className="text-[13px] text-ink-body mt-0.5 leading-relaxed">{issueDescription}</p>
                 </div>
               )}
@@ -420,7 +419,7 @@ function BookConsultation() {
             disabled={submitting}
             className="w-full bg-brand-teal text-white rounded-2xl py-3.5 font-display font-bold text-[15px] hover:bg-brand-teal-deep transition-colors disabled:opacity-50 shadow-glow"
           >
-            {submitting ? "Booking..." : pkg === "SINGLE" ? "Confirm & Pay 500 ETB" : "Confirm Booking"}
+            {submitting ? t("book_booking") : pkg === "SINGLE" ? t("book_confirm_paid") : t("book_confirm_free")}
           </button>
         </motion.div>
       )}

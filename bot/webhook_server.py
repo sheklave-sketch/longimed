@@ -555,6 +555,8 @@ async def book_session(request: Request):
     if not telegram_id or not package or not issue_description:
         raise HTTPException(status_code=400, detail="telegram_id, package, and issue_description are required")
 
+    # Normalize case — Mini App sends uppercase, bot sends lowercase
+    package = package.lower() if package else package
     if package not in ("free_trial", "single"):
         raise HTTPException(status_code=400, detail="package must be 'free_trial' or 'single'")
 
@@ -621,26 +623,59 @@ async def book_session(request: Request):
         raise HTTPException(status_code=500, detail="Internal server error")
 
     from telegram import Bot, InlineKeyboardButton, InlineKeyboardMarkup
+    from bot.i18n import t
     bot = Bot(settings.telegram_bot_token)
 
-    if package == "free_trial" and doctor_id and doctor and doctor.telegram_id:
+    # Get patient language for translated notifications
+    patient_lang = "en"
+    try:
+        async with session_factory() as s:
+            u = (await s.execute(select(User).where(User.telegram_id == telegram_id))).scalar_one_or_none()
+            if u:
+                patient_lang = u.language
+    except Exception:
+        pass
+
+    if package == "free_trial" and doctor_id:
         # Free trial: notify doctor with Accept/Decline buttons
-        kb = InlineKeyboardMarkup([[
-            InlineKeyboardButton("\u2705 Accept Session", callback_data=f"accept_session:{session_id}"),
-            InlineKeyboardButton("\u274c Decline", callback_data=f"decline_session:{session_id}"),
-        ]])
+        if doctor and doctor.telegram_id:
+            mode_label = "Anonymous (relay)" if is_anonymous else "Named (room)"
+            kb = InlineKeyboardMarkup([[
+                InlineKeyboardButton("\u2705 Accept Session", callback_data=f"accept_session:{session_id}"),
+                InlineKeyboardButton("\u274c Decline", callback_data=f"decline_session:{session_id}"),
+            ]])
+            try:
+                await bot.send_message(
+                    chat_id=doctor.telegram_id,
+                    text=(
+                        f"New consultation request (#{session_id})\n\n"
+                        f"Mode: {mode_label}\n"
+                        f"Issue: {issue_description[:200]}"
+                    ),
+                    reply_markup=kb,
+                )
+            except Exception as exc:
+                logger.error("Failed to notify doctor: %s", exc)
+        elif doctor and not doctor.telegram_id:
+            # Doctor has no Telegram linked — alert admins
+            for admin_id in settings.admin_ids:
+                try:
+                    await bot.send_message(
+                        chat_id=admin_id,
+                        text=f"⚠️ Session #{session_id}: Dr. {doctor.full_name} has no Telegram linked.",
+                    )
+                except Exception:
+                    pass
+
+        # Notify patient in bot
         try:
             await bot.send_message(
-                chat_id=doctor.telegram_id,
-                text=(
-                    f"New consultation request (#{session_id})\n\n"
-                    f"Mode: {'Anonymous (relay)' if is_anonymous else 'Named (topic)'}\n"
-                    f"Issue: {issue_description[:200]}"
-                ),
-                reply_markup=kb,
+                chat_id=telegram_id,
+                text=t("session_awaiting", patient_lang),
             )
-        except Exception as exc:
-            logger.error("Failed to notify doctor: %s", exc)
+        except Exception:
+            pass
+
     elif package == "single":
         # Paid: notify admins with Confirm/Reject payment buttons
         pay_kb = InlineKeyboardMarkup([[
@@ -661,12 +696,24 @@ async def book_session(request: Request):
             except Exception:
                 pass
 
+        # Notify patient with payment instructions in their language
+        try:
+            await bot.send_message(
+                chat_id=telegram_id,
+                text=t("payment_manual_instructions", patient_lang,
+                      amount="500",
+                      bank_name="Commercial Bank of Ethiopia",
+                      account_number="1000XXXXXXXX",
+                      account_name="LongiMed Health Services"),
+            )
+        except Exception:
+            pass
+
     result = {"session_id": session_id, "status": final_status}
     if package == "single":
-        result["payment_instructions"] = (
-            "Please transfer 500 ETB via bank transfer. "
-            "Send your receipt/screenshot to the bot for admin confirmation."
-        )
+        result["payment_instructions"] = t("payment_manual_instructions", patient_lang,
+            amount="500", bank_name="Commercial Bank of Ethiopia",
+            account_number="1000XXXXXXXX", account_name="LongiMed Health Services")
     return result
 
 
