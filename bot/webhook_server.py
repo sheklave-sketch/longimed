@@ -620,13 +620,46 @@ async def book_session(request: Request):
         logger.exception("Failed to book session")
         raise HTTPException(status_code=500, detail="Internal server error")
 
-    # Notify the doctor if one was selected
-    if doctor_id and doctor:
-        await _tg_notify(
-            doctor.telegram_id,
-            f"New consultation request (session #{session_id}).\n"
-            f"Package: {package}\nIssue: {issue_description[:200]}",
-        )
+    from telegram import Bot, InlineKeyboardButton, InlineKeyboardMarkup
+    bot = Bot(settings.telegram_bot_token)
+
+    if package == "free_trial" and doctor_id and doctor and doctor.telegram_id:
+        # Free trial: notify doctor with Accept/Decline buttons
+        kb = InlineKeyboardMarkup([[
+            InlineKeyboardButton("\u2705 Accept Session", callback_data=f"accept_session:{session_id}"),
+            InlineKeyboardButton("\u274c Decline", callback_data=f"decline_session:{session_id}"),
+        ]])
+        try:
+            await bot.send_message(
+                chat_id=doctor.telegram_id,
+                text=(
+                    f"New consultation request (#{session_id})\n\n"
+                    f"Mode: {'Anonymous (relay)' if is_anonymous else 'Named (topic)'}\n"
+                    f"Issue: {issue_description[:200]}"
+                ),
+                reply_markup=kb,
+            )
+        except Exception as exc:
+            logger.error("Failed to notify doctor: %s", exc)
+    elif package == "single":
+        # Paid: notify admins with Confirm/Reject payment buttons
+        pay_kb = InlineKeyboardMarkup([[
+            InlineKeyboardButton("\u2705 Confirm Payment (500 ETB)", callback_data=f"confirmpay:{telegram_id}:500"),
+            InlineKeyboardButton("\u274c Reject", callback_data=f"rejectpay:{telegram_id}:{session_id}"),
+        ]])
+        for admin_id in settings.admin_ids:
+            try:
+                await bot.send_message(
+                    chat_id=admin_id,
+                    text=(
+                        f"\U0001f4b0 Pending payment for session #{session_id}\n"
+                        f"Patient TG ID: {telegram_id}\n"
+                        f"Amount: 500 ETB"
+                    ),
+                    reply_markup=pay_kb,
+                )
+            except Exception:
+                pass
 
     result = {"session_id": session_id, "status": final_status}
     if package == "single":
