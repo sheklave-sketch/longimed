@@ -3,8 +3,9 @@
 import { useState, useEffect } from "react";
 import { useParams, useRouter } from "next/navigation";
 import { motion } from "framer-motion";
-import { openBotLink, initTelegram } from "@/lib/telegram";
+import { initTelegram } from "@/lib/telegram";
 import type { Doctor } from "@/lib/api";
+import { t, specLabel } from "@/lib/i18n";
 
 const SPEC_ICONS: Record<string, string> = {
   general: "🩺", family_medicine: "👨‍👩‍👧‍👦", internal_medicine: "💊",
@@ -39,32 +40,29 @@ export default function DoctorProfile() {
   if (!doctor) return (
     <div className="pt-20 text-center">
       <div className="w-16 h-16 rounded-2xl bg-surface-muted flex items-center justify-center text-3xl mx-auto mb-4">😔</div>
-      <h2 className="font-display font-bold text-ink-rich text-lg">Doctor not found</h2>
+      <h2 className="font-display font-bold text-ink-rich text-lg">{t("doc_not_found")}</h2>
       <button onClick={() => router.push("/doctors")} className="mt-5 px-6 py-2.5 bg-brand-teal text-white rounded-2xl text-sm font-semibold shadow-glow-sm">
-        ← Back to Directory
+        {t("doc_back_directory")}
       </button>
     </div>
   );
 
   const allSpecs = doctor.specialties || [doctor.specialty];
   const specIcon = SPEC_ICONS[allSpecs[0]] || "🏥";
+  const specText = allSpecs.map((s) => specLabel(s)).join(", ");
   const initials = doctor.full_name.split(" ").map((n) => n[0]).join("").slice(0, 2);
-  const specLabel = allSpecs.map((s) => s.replace("_", " ").replace(/\b\w/g, (c: string) => c.toUpperCase())).join(", ");
 
   return (
     <div className="pt-3 pb-28">
-      {/* Back */}
       <motion.button initial={{ opacity: 0, x: -8 }} animate={{ opacity: 1, x: 0 }}
         onClick={() => router.push("/doctors")}
         className="flex items-center gap-1.5 text-ink-secondary text-[13px] font-medium mb-5 hover:text-brand-teal transition-colors"
       >
         <svg width="14" height="14" viewBox="0 0 14 14" fill="none"><path d="M9 3L5 7L9 11" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"/></svg>
-        Back
+        {t("back")}
       </motion.button>
 
-      {/* Profile card */}
       <motion.div initial={{ opacity: 0, y: 16 }} animate={{ opacity: 1, y: 0 }} className="card p-6 text-center mb-4">
-        {/* Avatar */}
         <div className="relative inline-block mb-4">
           {doctor.profile_photo_url ? (
             <img src={doctor.profile_photo_url} alt={doctor.full_name} className="w-20 h-20 rounded-3xl object-cover shadow-glow mx-auto" />
@@ -78,65 +76,58 @@ export default function DoctorProfile() {
           </div>
         </div>
 
-        {/* Name + badge */}
         <div className="flex items-center justify-center gap-2 mb-1">
           <h1 className="font-display font-bold text-[20px] text-ink-rich">Dr. {doctor.full_name}</h1>
           <span className="w-5 h-5 rounded-full bg-brand-teal flex items-center justify-center badge-verified">
             <svg width="11" height="11" viewBox="0 0 11 11" fill="none"><path d="M3 5.5L4.8 7.5L8 3.5" stroke="white" strokeWidth="1.4" strokeLinecap="round" strokeLinejoin="round"/></svg>
           </span>
         </div>
-        <p className="text-ink-secondary text-[13px] font-medium">{specIcon} {specLabel}</p>
+        <p className="text-ink-secondary text-[13px] font-medium">{specIcon} {specText}</p>
 
-        {/* Stats row */}
         <div className="flex items-center justify-center mt-5 bg-surface-muted rounded-2xl p-3 divide-x divide-surface-border">
           <div className="flex-1 text-center">
             <p className="font-display font-bold text-[18px] text-ink-rich">{doctor.rating_avg > 0 ? doctor.rating_avg : "—"}</p>
-            <p className="text-[10px] font-semibold text-ink-muted uppercase tracking-wider">Rating</p>
+            <p className="text-[10px] font-semibold text-ink-muted uppercase tracking-wider">{t("doc_rating")}</p>
           </div>
           <div className="flex-1 text-center">
             <p className="font-display font-bold text-[18px] text-ink-rich">{doctor.rating_count}</p>
-            <p className="text-[10px] font-semibold text-ink-muted uppercase tracking-wider">Reviews</p>
+            <p className="text-[10px] font-semibold text-ink-muted uppercase tracking-wider">{t("doc_reviews_label")}</p>
           </div>
           <div className="flex-1 text-center">
             <p className="text-[18px]">{doctor.languages.map((l) => l === "am" ? "🇪🇹" : "🇬🇧").join(" ")}</p>
-            <p className="text-[10px] font-semibold text-ink-muted uppercase tracking-wider">Languages</p>
+            <p className="text-[10px] font-semibold text-ink-muted uppercase tracking-wider">{t("doc_languages_label")}</p>
           </div>
         </div>
       </motion.div>
 
-      {/* Details card */}
       <motion.div initial={{ opacity: 0, y: 16 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.1 }} className="card p-5 space-y-4 mb-4">
         {doctor.bio && (
           <div>
-            <h3 className="font-display font-semibold text-ink-rich text-[13px] mb-1.5">About</h3>
+            <h3 className="font-display font-semibold text-ink-rich text-[13px] mb-1.5">{t("doc_about_label")}</h3>
             <p className="text-ink-body text-[13px] leading-[1.7]">{doctor.bio}</p>
           </div>
         )}
-
         <div className="h-px bg-surface-border" />
-
         <div className="flex items-center gap-3">
           <div className="w-8 h-8 rounded-lg bg-brand-teal-light flex items-center justify-center text-[14px]">📋</div>
           <div>
-            <p className="text-[11px] font-semibold text-ink-muted uppercase tracking-wider">License</p>
+            <p className="text-[11px] font-semibold text-ink-muted uppercase tracking-wider">{t("doc_license_label")}</p>
             <p className="font-mono text-ink-body text-[13px] tracking-wide">{doctor.license_number}</p>
           </div>
         </div>
-
         <div className="flex items-center gap-3">
           <div className={`w-8 h-8 rounded-lg flex items-center justify-center text-[14px] ${doctor.is_available ? "bg-emerald-50" : "bg-surface-muted"}`}>
             {doctor.is_available ? "🟢" : "🔴"}
           </div>
           <div>
-            <p className="text-[11px] font-semibold text-ink-muted uppercase tracking-wider">Status</p>
+            <p className="text-[11px] font-semibold text-ink-muted uppercase tracking-wider">{t("doc_status")}</p>
             <p className={`text-[13px] font-semibold ${doctor.is_available ? "text-emerald-600" : "text-ink-muted"}`}>
-              {doctor.is_available ? "Available for consultations" : "Currently unavailable"}
+              {doctor.is_available ? t("doc_available") : t("doc_unavailable")}
             </p>
           </div>
         </div>
       </motion.div>
 
-      {/* CTA */}
       <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.2 }}
         className="fixed bottom-0 left-0 right-0 bottom-bar px-5 pt-6 pb-5"
       >
@@ -150,7 +141,7 @@ export default function DoctorProfile() {
                 : "bg-surface-muted text-ink-muted cursor-not-allowed"
             }`}
           >
-            {doctor.is_available ? "Book Consultation →" : "Currently Unavailable"}
+            {doctor.is_available ? t("doc_book") : t("doc_book_unavailable")}
           </button>
         </div>
       </motion.div>

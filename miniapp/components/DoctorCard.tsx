@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { motion } from "framer-motion";
 import type { Doctor } from "@/lib/api";
+import { t } from "@/lib/i18n";
 
 const SPEC_CONFIG: Record<string, { bg: string; text: string; icon: string }> = {
   general: { bg: "bg-brand-teal-light", text: "text-brand-teal-deep", icon: "🩺" },
@@ -76,10 +77,10 @@ export default function DoctorCard({ doctor, index = 0 }: { doctor: Doctor; inde
               <div className="flex items-center gap-3 mt-1.5">
                 <span className="flex items-center gap-1 text-[12px] text-ink-secondary">
                   <span className="text-brand-gold">★</span>
-                  {doctor.rating_avg > 0 ? <><span className="font-semibold text-ink-body">{doctor.rating_avg}</span><span className="text-ink-muted">/5 · {doctor.rating_count}</span></> : <span className="text-ink-muted">New</span>}
+                  {doctor.rating_avg > 0 ? <><span className="font-semibold text-ink-body">{doctor.rating_avg}</span><span className="text-ink-muted">/5 · {doctor.rating_count}</span></> : <span className="text-ink-muted">{t("doc_new")}</span>}
                 </span>
                 <span className={`text-[11px] font-semibold ${doctor.is_available ? "text-emerald-600" : "text-ink-muted"}`}>
-                  {doctor.is_available ? "Available" : "Busy"}
+                  {doctor.is_available ? t("doc_available_short") : t("doc_busy")}
                 </span>
               </div>
             </div>
