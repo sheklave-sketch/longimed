@@ -754,12 +754,19 @@ async def handle_confirm_payment(update: Update, context: ContextTypes.DEFAULT_T
 
     # Notify doctor with Accept/Decline buttons + start timeout timer
     if session_id:
-        await _notify_doctor_new_session(context, session_id, "en")
-        await _start_doctor_timer(context, session_id)
+        logger.info("Payment confirmed — notifying doctor for session #%d", session_id)
+        try:
+            await _notify_doctor_new_session(context, session_id, "en")
+            await _start_doctor_timer(context, session_id)
+            logger.info("Doctor notified for session #%d", session_id)
+        except Exception:
+            logger.exception("Failed to notify doctor for session #%d", session_id)
+    else:
+        logger.warning("Payment confirmed for tg_id=%s but no pending session found", target_tg_id)
 
     await query.edit_message_text(
         f"✅ Payment confirmed — {amount} ETB from user {target_tg_id}."
-        + (f" Session #{session_id} approved. Doctor notified." if session_id else "")
+        + (f" Session #{session_id} approved. Doctor notified." if session_id else " (no pending session found)")
     )
 
 
