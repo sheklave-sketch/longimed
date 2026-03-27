@@ -538,30 +538,17 @@ async def _cleanup_room(bot, room_id: int, patient_tg_id: int | None, doctor_tg_
     except Exception as exc:
         logger.warning("Room cleanup — could not delete messages in %s: %s", room_id, exc)
 
-    # Step 2: KICK USERS (after messages are deleted)
-    if patient_tg_id:
-        try:
-            await bot.ban_chat_member(chat_id=room_id, user_id=patient_tg_id)
-            await asyncio.sleep(0.5)
-            await bot.unban_chat_member(chat_id=room_id, user_id=patient_tg_id)
-            logger.info("Kicked patient %s from room %s", patient_tg_id, room_id)
-        except Exception as exc:
-            logger.warning("Could not kick patient %s from room %s: %s", patient_tg_id, room_id, exc)
+    # Step 2: BAN USERS (keeps them out — unbanned when next session assigns this room)
+    for user_tg_id, role in [(patient_tg_id, "patient"), (doctor_tg_id, "doctor")]:
+        if user_tg_id:
+            try:
+                await bot.ban_chat_member(chat_id=room_id, user_id=user_tg_id)
+                logger.info("Banned %s %s from room %s", role, user_tg_id, room_id)
+            except Exception as exc:
+                logger.warning("Could not ban %s %s from room %s: %s", role, user_tg_id, room_id, exc)
 
-    if doctor_tg_id:
-        try:
-            await bot.ban_chat_member(chat_id=room_id, user_id=doctor_tg_id)
-            await asyncio.sleep(0.5)
-            await bot.unban_chat_member(chat_id=room_id, user_id=doctor_tg_id)
-            logger.info("Kicked doctor %s from room %s", doctor_tg_id, room_id)
-        except Exception as exc:
-            logger.warning("Could not kick doctor %s from room %s: %s", doctor_tg_id, room_id, exc)
-
-    # Step 3: Revoke invite links
-    try:
-        await bot.export_chat_invite_link(room_id)
-    except Exception as exc:
-        logger.warning("Room cleanup — could not revoke invite links for %s: %s", room_id, exc)
+    # Step 3: Users are BANNED so old invite links won't work.
+    # They get unbanned when the next session assigns this room.
 
     logger.info("Room %s cleaned up (%d messages deleted)", room_id, deleted)
 
@@ -626,7 +613,18 @@ async def accept_session_callback(update: Update, context: ContextTypes.DEFAULT_
                         s2.group_chat_id = room_id
                         await db.commit()
 
-                    # Create invite link (no member limit — revoked on cleanup)
+                    # Unban users from previous sessions (they were banned on cleanup)
+                    if patient_user:
+                        try:
+                            await context.bot.unban_chat_member(chat_id=room_id, user_id=patient_user.telegram_id)
+                        except Exception:
+                            pass
+                    try:
+                        await context.bot.unban_chat_member(chat_id=room_id, user_id=update.effective_user.id)
+                    except Exception:
+                        pass
+
+                    # Create invite link
                     invite = await context.bot.create_chat_invite_link(
                         chat_id=room_id,
                         name=f"Session #{session_id}",
