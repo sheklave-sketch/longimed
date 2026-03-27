@@ -375,7 +375,14 @@ async def confirm_end_callback(update: Update, context: ContextTypes.DEFAULT_TYP
                 await query.answer("You are not part of this session.", show_alert=True)
                 return
 
-            # The person who clicks confirm is the OTHER party
+            # Only the OTHER party (who hasn't confirmed yet) can click this
+            if is_doctor and active_session.resolution_confirmed_by_doctor:
+                await query.answer("You already requested to end. Waiting for the other party.", show_alert=True)
+                return
+            if is_patient and active_session.resolution_confirmed_by_patient:
+                await query.answer("You already requested to end. Waiting for the other party.", show_alert=True)
+                return
+
             if is_doctor:
                 active_session.resolution_confirmed_by_doctor = True
             else:
