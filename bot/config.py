@@ -15,6 +15,7 @@ class Settings(BaseSettings):
     admin_chat_ids: str = ""
     public_channel_id: int = 0
     discussion_group_id: int = 0
+    consultation_room_ids: str = ""
     miniapp_url: str = "https://longimed.vercel.app"
 
     # Database
@@ -51,6 +52,13 @@ class Settings(BaseSettings):
         if not self.admin_chat_ids:
             return []
         return [int(x.strip()) for x in self.admin_chat_ids.split(",") if x.strip()]
+
+    @property
+    def room_ids(self) -> list[int]:
+        """Parse consultation room group IDs from comma-separated string."""
+        if not self.consultation_room_ids:
+            return []
+        return [int(x.strip()) for x in self.consultation_room_ids.split(",") if x.strip()]
 
     @property
     def is_production(self) -> bool:

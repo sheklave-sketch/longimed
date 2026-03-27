@@ -139,6 +139,7 @@ async def end_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> Non
                     active_session.status = SessionStatus.RESOLVED
                     active_session.ended_at = datetime.now(timezone.utc)
                     session_id = active_session.id
+                    room_id = active_session.group_chat_id
                     patient_user = await session.get(User, active_session.user_id)
                     await session.commit()
 
@@ -146,6 +147,14 @@ async def end_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> Non
                         "Session resolved. Thank you!",
                         reply_markup=back_btn,
                     )
+
+                    # Clean up consultation room
+                    if room_id:
+                        await _cleanup_room(
+                            context.bot, room_id,
+                            patient_user.telegram_id if patient_user else None,
+                            telegram_id,
+                        )
 
                     # Send rating + follow-up option to patient
                     if patient_user:
@@ -220,7 +229,17 @@ async def end_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> Non
                     active_session.status = SessionStatus.RESOLVED
                     active_session.ended_at = datetime.now(timezone.utc)
                     session_id = active_session.id
+                    room_id = active_session.group_chat_id
+                    doctor_obj = await session.get(Doctor, active_session.doctor_id) if active_session.doctor_id else None
                     await session.commit()
+
+                    # Clean up consultation room
+                    if room_id:
+                        await _cleanup_room(
+                            context.bot, room_id,
+                            telegram_id,
+                            doctor_obj.telegram_id if doctor_obj else None,
+                        )
 
                     followup_kb = InlineKeyboardMarkup([
                         [InlineKeyboardButton(
@@ -260,6 +279,113 @@ async def end_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> Non
             "Something went wrong. Please try again.",
             reply_markup=back_btn,
         )
+
+
+# ── Consultation room helpers ────────────────────────────────────────────
+
+async def _find_available_room(session_id: int) -> int | None:
+    """Find a consultation room not currently used by an active session."""
+    room_ids = settings.room_ids
+    if not room_ids:
+        return None
+
+    async with session_factory() as session:
+        result = await session.execute(
+            select(ConsultSession.group_chat_id).where(
+                ConsultSession.status == SessionStatus.ACTIVE,
+                ConsultSession.group_chat_id.isnot(None),
+            )
+        )
+        occupied = {row[0] for row in result.all()}
+
+    for rid in room_ids:
+        if rid not in occupied:
+            return rid
+    return None
+
+
+async def _fallback_to_relay(context, session_id: int, patient_user, doctor_tg_id: int) -> None:
+    """Switch session to RELAY mode and notify both parties."""
+    async with session_factory() as db:
+        s = await db.get(ConsultSession, session_id)
+        s.session_mode = SessionMode.RELAY
+        await db.commit()
+
+    if patient_user:
+        try:
+            await context.bot.send_message(
+                chat_id=patient_user.telegram_id,
+                text=(
+                    "✅ Your doctor has accepted the session!\n\n"
+                    "All rooms are busy — send your messages here "
+                    "and the bot will relay them to your doctor.\n\n"
+                    "Use /end when you're done."
+                ),
+            )
+        except Exception:
+            pass
+
+    try:
+        await context.bot.send_message(
+            chat_id=doctor_tg_id,
+            text=(
+                "Session is now active (relay mode — rooms were full).\n\n"
+                "Send your messages here and the bot will forward them to the patient.\n"
+                "Use /end when the consultation is complete."
+            ),
+        )
+    except Exception:
+        pass
+
+    logger.info("Session #%d fell back to RELAY mode", session_id)
+
+
+async def _cleanup_room(bot, room_id: int, patient_tg_id: int | None, doctor_tg_id: int | None) -> None:
+    """Delete messages and kick users from a consultation room."""
+    import asyncio
+
+    # Delete recent messages (Telegram allows deleting messages < 48h old)
+    deleted = 0
+    try:
+        # Get recent messages by sending a probe and working backwards
+        # Use deleteMessages batch API — collect message IDs first
+        # Simpler: iterate from the last known message
+        probe = await bot.send_message(chat_id=room_id, text="🧹 Cleaning room...")
+        probe_id = probe.message_id
+
+        # Delete in batches of 100 (Telegram limit)
+        batch = list(range(max(1, probe_id - 200), probe_id + 1))
+        for i in range(0, len(batch), 100):
+            chunk = batch[i:i + 100]
+            try:
+                await bot.delete_messages(chat_id=room_id, message_ids=chunk)
+                deleted += len(chunk)
+            except Exception:
+                pass
+    except Exception as exc:
+        logger.warning("Room cleanup — could not delete messages in %s: %s", room_id, exc)
+
+    # Kick patient
+    if patient_tg_id:
+        try:
+            await bot.ban_chat_member(chat_id=room_id, user_id=patient_tg_id)
+            await asyncio.sleep(0.5)
+            await bot.unban_chat_member(chat_id=room_id, user_id=patient_tg_id)
+            logger.info("Kicked patient %s from room %s", patient_tg_id, room_id)
+        except Exception as exc:
+            logger.warning("Could not kick patient %s from room %s: %s", patient_tg_id, room_id, exc)
+
+    # Kick doctor
+    if doctor_tg_id:
+        try:
+            await bot.ban_chat_member(chat_id=room_id, user_id=doctor_tg_id)
+            await asyncio.sleep(0.5)
+            await bot.unban_chat_member(chat_id=room_id, user_id=doctor_tg_id)
+            logger.info("Kicked doctor %s from room %s", doctor_tg_id, room_id)
+        except Exception as exc:
+            logger.warning("Could not kick doctor %s from room %s: %s", doctor_tg_id, room_id, exc)
+
+    logger.info("Room %s cleaned up (%d messages deleted)", room_id, deleted)
 
 
 # ── Accept session callback ──────────────────────────────────────────────
@@ -310,123 +436,76 @@ async def accept_session_callback(update: Update, context: ContextTypes.DEFAULT_
             reply_markup=back_btn,
         )
 
-        # ── TOPIC mode: create forum topic + send invite links ──
-        if is_topic and settings.discussion_group_id:
-            try:
-                topic = await context.bot.create_forum_topic(
-                    chat_id=settings.discussion_group_id,
-                    name=f"Session #{session_id} — {issue_desc}",
-                )
-                topic_id = topic.message_thread_id
+        # ── TOPIC mode: assign a consultation room ──
+        if is_topic and settings.room_ids:
+            room_id = await _find_available_room(session_id)
 
-                # Save topic info on session
-                async with session_factory() as db:
-                    s2 = await db.get(ConsultSession, session_id)
-                    s2.topic_id = topic_id
-                    s2.group_chat_id = settings.discussion_group_id
-                    await db.commit()
+            if room_id:
+                try:
+                    # Save room on session
+                    async with session_factory() as db:
+                        s2 = await db.get(ConsultSession, session_id)
+                        s2.group_chat_id = room_id
+                        await db.commit()
 
-                # Send welcome message inside the topic
-                patient_name = "Patient"
-                if patient_user and patient_user.telegram_id:
-                    try:
-                        member = await context.bot.get_chat_member(
-                            settings.discussion_group_id, patient_user.telegram_id
-                        )
-                        patient_name = member.user.first_name or "Patient"
-                    except Exception:
-                        patient_name = "Patient"
+                    # Create invite link (2 uses: patient + doctor)
+                    invite = await context.bot.create_chat_invite_link(
+                        chat_id=room_id,
+                        member_limit=2,
+                        name=f"Session #{session_id}",
+                    )
 
-                await context.bot.send_message(
-                    chat_id=settings.discussion_group_id,
-                    message_thread_id=topic_id,
-                    text=(
-                        f"🩺 Consultation Session #{session_id}\n\n"
-                        f"Doctor: Dr. {doctor_name}\n"
-                        f"Topic: {issue_desc}\n\n"
-                        f"Both parties can chat here. Use /end when done."
-                    ),
-                )
+                    # Send welcome message in the room
+                    await context.bot.send_message(
+                        chat_id=room_id,
+                        text=(
+                            f"🩺 Consultation Session #{session_id}\n\n"
+                            f"Doctor: Dr. {doctor_name}\n"
+                            f"Topic: {issue_desc}\n\n"
+                            f"Chat directly here. Use /end in the bot when done."
+                        ),
+                    )
 
-                # Create invite link for users who might not be in the group
-                invite = await context.bot.create_chat_invite_link(
-                    chat_id=settings.discussion_group_id,
-                    member_limit=2,
-                    name=f"Session #{session_id}",
-                )
+                    # Notify patient
+                    if patient_user:
+                        try:
+                            await context.bot.send_message(
+                                chat_id=patient_user.telegram_id,
+                                text=(
+                                    f"✅ Your doctor has accepted the session!\n\n"
+                                    f"👉 Join your consultation room:\n{invite.invite_link}\n\n"
+                                    f"Chat directly with your doctor there.\n"
+                                    f"Use /end here when the session is complete."
+                                ),
+                            )
+                        except Exception as exc:
+                            logger.error("Failed to notify patient with room link: %s", exc)
 
-                # Build the topic deep link
-                # Private supergroup IDs are -100xxx; strip -100 prefix for link
-                group_id_str = str(settings.discussion_group_id)
-                if group_id_str.startswith("-100"):
-                    link_id = group_id_str[4:]
-                else:
-                    link_id = group_id_str.lstrip("-")
-                topic_link = f"https://t.me/c/{link_id}/{topic_id}"
-
-                # Notify patient with link
-                if patient_user:
+                    # Notify doctor
                     try:
                         await context.bot.send_message(
-                            chat_id=patient_user.telegram_id,
+                            chat_id=update.effective_user.id,
                             text=(
-                                f"✅ Your doctor has accepted the session!\n\n"
-                                f"👉 Join the discussion here:\n{topic_link}\n\n"
-                                f"If you can't open the link, join the group first:\n"
-                                f"{invite.invite_link}\n\n"
-                                f"Then open the discussion link above."
+                                f"✅ Session #{session_id} is now active.\n\n"
+                                f"👉 Join the consultation room:\n{invite.invite_link}\n\n"
+                                f"Use /end here when the consultation is complete."
                             ),
                         )
                     except Exception as exc:
-                        logger.error("Failed to notify patient with topic link: %s", exc)
+                        logger.error("Failed to send room link to doctor: %s", exc)
 
-                # Notify doctor with link
-                try:
-                    await context.bot.send_message(
-                        chat_id=update.effective_user.id,
-                        text=(
-                            f"✅ Session #{session_id} is now active.\n\n"
-                            f"👉 Discussion thread:\n{topic_link}\n\n"
-                            f"If you can't open the link, join the group first:\n"
-                            f"{invite.invite_link}\n\n"
-                            f"Use /end when the consultation is complete."
-                        ),
-                    )
+                    logger.info("Session #%d assigned to room %s", session_id, room_id)
+
                 except Exception as exc:
-                    logger.error("Failed to send topic link to doctor: %s", exc)
-
-            except Exception as exc:
-                logger.error("Failed to create forum topic for session #%d: %s", session_id, exc, exc_info=True)
-                # Fallback: tell both to use relay instead
-                if patient_user:
-                    try:
-                        await context.bot.send_message(
-                            chat_id=patient_user.telegram_id,
-                            text=(
-                                "✅ Your doctor has accepted the session!\n\n"
-                                "⚠️ Could not create discussion thread. "
-                                "Send your messages here and the bot will relay them.\n\n"
-                                "Use /end when you're done."
-                            ),
-                        )
-                    except Exception:
-                        pass
-                # Switch session to relay as fallback
-                async with session_factory() as db:
-                    s2 = await db.get(ConsultSession, session_id)
-                    s2.session_mode = SessionMode.RELAY
-                    await db.commit()
-                logger.info("Session #%d fell back to RELAY mode", session_id)
+                    logger.error("Failed to set up room for session #%d: %s", session_id, exc, exc_info=True)
+                    # Fallback to relay
+                    await _fallback_to_relay(context, session_id, patient_user, update.effective_user.id)
+            else:
+                logger.warning("No rooms available for session #%d — falling back to relay", session_id)
+                await _fallback_to_relay(context, session_id, patient_user, update.effective_user.id)
 
         # ── RELAY mode: send relay instructions ──
-        elif is_relay or (is_topic and not settings.discussion_group_id):
-            if is_topic and not settings.discussion_group_id:
-                logger.warning("TOPIC session #%d but discussion_group_id not configured — falling back to RELAY", session_id)
-                async with session_factory() as db:
-                    s2 = await db.get(ConsultSession, session_id)
-                    s2.session_mode = SessionMode.RELAY
-                    await db.commit()
-
+        elif is_relay:
             if patient_user:
                 try:
                     await context.bot.send_message(
@@ -452,6 +531,11 @@ async def accept_session_callback(update: Update, context: ContextTypes.DEFAULT_
                 )
             except Exception as exc:
                 logger.error("Failed to send relay instructions to doctor: %s", exc)
+
+        # ── TOPIC mode but no rooms configured — fallback ──
+        elif is_topic and not settings.room_ids:
+            logger.warning("TOPIC session #%d but no rooms configured — falling back to RELAY", session_id)
+            await _fallback_to_relay(context, session_id, patient_user, update.effective_user.id)
 
     except Exception as exc:
         logger.error("Error accepting session: %s", exc, exc_info=True)
