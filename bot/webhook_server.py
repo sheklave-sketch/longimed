@@ -139,6 +139,7 @@ async def list_doctors(specialty: str | None = None):
             "id": d.id,
             "full_name": d.full_name,
             "specialty": d.specialty.value if hasattr(d.specialty, "value") else d.specialty,
+            "specialties": d.specialties or [d.specialty.value if hasattr(d.specialty, "value") else d.specialty],
             "bio": d.bio,
             "is_available": d.is_available,
             "rating_avg": round(d.rating_avg, 2),
@@ -170,6 +171,7 @@ async def get_doctor(doctor_id: int):
         "id": doctor.id,
         "full_name": doctor.full_name,
         "specialty": doctor.specialty.value if hasattr(doctor.specialty, "value") else doctor.specialty,
+        "specialties": doctor.specialties or [doctor.specialty.value if hasattr(doctor.specialty, "value") else doctor.specialty],
         "bio": doctor.bio,
         "license_number": doctor.license_number,
         "is_available": doctor.is_available,
@@ -780,6 +782,7 @@ async def search_doctors(q: str = ""):
             "id": d.id,
             "full_name": d.full_name,
             "specialty": d.specialty.value if hasattr(d.specialty, "value") else d.specialty,
+            "specialties": d.specialties or [d.specialty.value if hasattr(d.specialty, "value") else d.specialty],
             "bio": d.bio,
             "is_available": d.is_available,
             "rating_avg": round(d.rating_avg, 2),
@@ -812,6 +815,7 @@ async def admin_register_doctor(request: Request):
     full_name = body.get("full_name")
     license_number = body.get("license_number")
     specialty = body.get("specialty")
+    specialties = body.get("specialties", [])
     languages = body.get("languages", ["en"])
     bio = body.get("bio", "")
     telegram_username = body.get("telegram_username")
@@ -849,11 +853,17 @@ async def admin_register_doctor(request: Request):
             # Always generate signup token — doctor links TG account via deep link
             signup_token = uuid.uuid4().hex[:16]
 
+            # Build specialties list: include primary + any additional
+            all_specialties = specialties if isinstance(specialties, list) and specialties else [specialty]
+            if specialty not in all_specialties:
+                all_specialties.insert(0, specialty)
+
             doctor = Doctor(
                 telegram_id=None,
                 full_name=full_name,
                 license_number=license_number,
                 specialty=spec_enum,
+                specialties=all_specialties,
                 languages=languages if isinstance(languages, list) else [languages],
                 bio=bio,
                 sex=sex_enum,

@@ -5,6 +5,7 @@ export interface Doctor {
   id: number;
   full_name: string;
   specialty: string;
+  specialties: string[];
   bio: string | null;
   is_available: boolean;
   rating_avg: number;
@@ -168,6 +169,7 @@ export async function adminRegisterDoctor(data: {
   full_name: string;
   license_number: string;
   specialty: string;
+  specialties: string[];
   languages: string[];
   bio: string;
   telegram_username?: string;

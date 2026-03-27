@@ -26,7 +26,7 @@ export default function Header() {
   }, []);
 
   const tabs = [
-    { href: "/", label: "Doctors", show: true },
+    { href: "/doctors", label: "Doctors", show: true },
     { href: "/qa", label: "Q&A", show: true },
     { href: "/book", label: "Book", show: !role.is_doctor },
     { href: "/dashboard", label: "Dashboard", show: role.is_doctor },
@@ -48,7 +48,7 @@ export default function Header() {
         <nav className="flex-1 flex justify-end">
           <div className="flex bg-surface-muted rounded-xl p-0.5">
             {tabs.map((item) => {
-              const active = item.href === "/" ? path === "/" : path.startsWith(item.href);
+              const active = path.startsWith(item.href);
               return (
                 <Link
                   key={item.href}

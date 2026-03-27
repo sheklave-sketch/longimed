@@ -16,6 +16,7 @@ const ADMIN_TOKENS: Record<string, number> = {
 
 const SPECIALTIES = [
   { value: "general", label: "General / GP", icon: "🩺" },
+  { value: "family_medicine", label: "Family Medicine", icon: "👨‍👩‍👧‍👦" },
   { value: "internal_medicine", label: "Internal Medicine", icon: "💊" },
   { value: "pediatrics", label: "Pediatrics", icon: "👶" },
   { value: "obgyn", label: "OB/GYN", icon: "🤰" },
@@ -46,7 +47,7 @@ export default function AdminPanel() {
   // Add doctor form state
   const [docName, setDocName] = useState("");
   const [docLicense, setDocLicense] = useState("");
-  const [docSpecialty, setDocSpecialty] = useState("");
+  const [docSpecialties, setDocSpecialties] = useState<string[]>([]);
   const [docLangs, setDocLangs] = useState<string[]>(["en"]);
   const [docBio, setDocBio] = useState("");
   const [docTgId, setDocTgId] = useState("");
@@ -124,7 +125,7 @@ export default function AdminPanel() {
   };
 
   const handleAddDoctor = async () => {
-    if (!docName.trim() || !docLicense.trim() || !docSpecialty) {
+    if (!docName.trim() || !docLicense.trim() || docSpecialties.length === 0) {
       setAddError("Name, license number, and specialty are required.");
       return;
     }
@@ -146,7 +147,8 @@ export default function AdminPanel() {
         admin_telegram_id: adminTgId,
         full_name: docName.trim(),
         license_number: docLicense.trim(),
-        specialty: docSpecialty,
+        specialty: docSpecialties[0],
+        specialties: docSpecialties,
         languages: docLangs,
         bio: docBio.trim(),
         telegram_username: docTgId.trim().replace(/^@/, "") || undefined,
@@ -267,7 +269,7 @@ export default function AdminPanel() {
                   <p className="text-[12px] text-ink-muted">Doctor already linked to Telegram — no signup link needed.</p>
                 )}
 
-                <button onClick={() => { setShowAddForm(false); setAddSuccess(false); setSignupLink(""); setDocName(""); setDocLicense(""); setDocSpecialty(""); setDocLangs(["en"]); setDocBio(""); setDocTgId(""); setDocPhone(""); setDocSex(""); setDocSubSpec(""); setDocPhoto(null); setDocPhotoPreview(""); setDocLicenseFile(null); setDocLicenseFileName(""); }}
+                <button onClick={() => { setShowAddForm(false); setAddSuccess(false); setSignupLink(""); setDocName(""); setDocLicense(""); setDocSpecialties([]); setDocLangs(["en"]); setDocBio(""); setDocTgId(""); setDocPhone(""); setDocSex(""); setDocSubSpec(""); setDocPhoto(null); setDocPhotoPreview(""); setDocLicenseFile(null); setDocLicenseFileName(""); }}
                   className="mt-2 text-[13px] text-brand-teal font-semibold"
                 >Register Another Doctor</button>
               </div>
@@ -286,12 +288,12 @@ export default function AdminPanel() {
                 </div>
 
                 <div>
-                  <label className="text-[11px] font-semibold text-ink-muted uppercase tracking-[0.08em] mb-1.5 block">Specialty *</label>
+                  <label className="text-[11px] font-semibold text-ink-muted uppercase tracking-[0.08em] mb-1.5 block">Specialties * <span className="normal-case font-normal">(select one or more)</span></label>
                   <div className="grid grid-cols-2 gap-1.5">
                     {SPECIALTIES.map((spec) => (
-                      <button key={spec.value} onClick={() => setDocSpecialty(spec.value)}
+                      <button key={spec.value} onClick={() => setDocSpecialties((prev) => prev.includes(spec.value) ? prev.filter((s) => s !== spec.value) : [...prev, spec.value])}
                         className={`py-2 px-3 rounded-xl text-[12px] font-semibold text-left transition-all ${
-                          docSpecialty === spec.value ? "bg-brand-teal text-white" : "bg-surface-muted text-ink-body hover:bg-surface-border"
+                          docSpecialties.includes(spec.value) ? "bg-brand-teal text-white" : "bg-surface-muted text-ink-body hover:bg-surface-border"
                         }`}
                       >{spec.icon} {spec.label}</button>
                     ))}
@@ -385,7 +387,7 @@ export default function AdminPanel() {
                   <p className="text-[12px] text-red-500 font-semibold">{addError}</p>
                 )}
 
-                <button onClick={handleAddDoctor} disabled={addLoading || !docName.trim() || !docLicense.trim() || !docSpecialty}
+                <button onClick={handleAddDoctor} disabled={addLoading || !docName.trim() || !docLicense.trim() || docSpecialties.length === 0}
                   className="w-full py-3 rounded-xl bg-brand-teal text-white font-display font-bold text-[14px] hover:bg-brand-teal-deep transition-colors disabled:opacity-50"
                 >{addLoading ? "Registering..." : "Register & Verify Doctor"}</button>
               </>

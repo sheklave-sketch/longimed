@@ -6,16 +6,24 @@ import type { Doctor } from "@/lib/api";
 
 const SPEC_CONFIG: Record<string, { bg: string; text: string; icon: string }> = {
   general: { bg: "bg-brand-teal-light", text: "text-brand-teal-deep", icon: "🩺" },
+  family_medicine: { bg: "bg-teal-50", text: "text-teal-700", icon: "👨‍👩‍👧‍👦" },
+  internal_medicine: { bg: "bg-blue-50", text: "text-blue-700", icon: "💊" },
   pediatrics: { bg: "bg-amber-50", text: "text-amber-700", icon: "👶" },
   obgyn: { bg: "bg-pink-50", text: "text-pink-700", icon: "🤰" },
+  surgery: { bg: "bg-red-50", text: "text-red-700", icon: "🔪" },
+  orthopedics: { bg: "bg-orange-50", text: "text-orange-700", icon: "🦴" },
   dermatology: { bg: "bg-violet-50", text: "text-violet-700", icon: "🧴" },
   mental_health: { bg: "bg-indigo-50", text: "text-indigo-700", icon: "🧠" },
   cardiology: { bg: "bg-rose-50", text: "text-rose-700", icon: "❤️" },
+  neurology: { bg: "bg-purple-50", text: "text-purple-700", icon: "🧬" },
+  ent: { bg: "bg-cyan-50", text: "text-cyan-700", icon: "👂" },
+  ophthalmology: { bg: "bg-sky-50", text: "text-sky-700", icon: "👁️" },
   other: { bg: "bg-slate-50", text: "text-slate-600", icon: "🏥" },
 };
 
 export default function DoctorCard({ doctor, index = 0 }: { doctor: Doctor; index?: number }) {
-  const spec = SPEC_CONFIG[doctor.specialty] || SPEC_CONFIG.other;
+  const allSpecs = doctor.specialties || [doctor.specialty];
+  const spec = SPEC_CONFIG[allSpecs[0]] || SPEC_CONFIG.other;
   const initials = doctor.full_name.split(" ").map((n) => n[0]).join("").slice(0, 2);
 
   return (
@@ -50,10 +58,16 @@ export default function DoctorCard({ doctor, index = 0 }: { doctor: Doctor; inde
                 </span>
               </div>
 
-              <div className="flex items-center gap-2">
-                <span className={`inline-flex items-center gap-1 px-2 py-[2px] rounded-lg text-[11px] font-semibold ${spec.bg} ${spec.text}`}>
-                  {spec.icon} {doctor.specialty.replace("_", " ")}
-                </span>
+              <div className="flex items-center gap-1.5 flex-wrap">
+                {allSpecs.slice(0, 2).map((s) => {
+                  const c = SPEC_CONFIG[s] || SPEC_CONFIG.other;
+                  return (
+                    <span key={s} className={`inline-flex items-center gap-1 px-2 py-[2px] rounded-lg text-[11px] font-semibold ${c.bg} ${c.text}`}>
+                      {c.icon} {s.replace("_", " ")}
+                    </span>
+                  );
+                })}
+                {allSpecs.length > 2 && <span className="text-[11px] text-ink-muted">+{allSpecs.length - 2}</span>}
                 <span className="text-[11px] text-ink-muted">
                   {doctor.languages.includes("am") && "🇪🇹"}{doctor.languages.includes("en") && " 🇬🇧"}
                 </span>

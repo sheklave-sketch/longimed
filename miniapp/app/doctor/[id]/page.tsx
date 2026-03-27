@@ -7,8 +7,10 @@ import { openBotLink, initTelegram } from "@/lib/telegram";
 import type { Doctor } from "@/lib/api";
 
 const SPEC_ICONS: Record<string, string> = {
-  general: "🩺", pediatrics: "👶", obgyn: "🤰", dermatology: "🧴",
-  mental_health: "🧠", cardiology: "❤️", other: "🏥",
+  general: "🩺", family_medicine: "👨‍👩‍👧‍👦", internal_medicine: "💊",
+  pediatrics: "👶", obgyn: "🤰", surgery: "🔪", orthopedics: "🦴",
+  dermatology: "🧴", mental_health: "🧠", cardiology: "❤️",
+  neurology: "🧬", ent: "👂", ophthalmology: "👁️", other: "🏥",
 };
 
 export default function DoctorProfile() {
@@ -38,21 +40,22 @@ export default function DoctorProfile() {
     <div className="pt-20 text-center">
       <div className="w-16 h-16 rounded-2xl bg-surface-muted flex items-center justify-center text-3xl mx-auto mb-4">😔</div>
       <h2 className="font-display font-bold text-ink-rich text-lg">Doctor not found</h2>
-      <button onClick={() => router.push("/")} className="mt-5 px-6 py-2.5 bg-brand-teal text-white rounded-2xl text-sm font-semibold shadow-glow-sm">
+      <button onClick={() => router.push("/doctors")} className="mt-5 px-6 py-2.5 bg-brand-teal text-white rounded-2xl text-sm font-semibold shadow-glow-sm">
         ← Back to Directory
       </button>
     </div>
   );
 
-  const specIcon = SPEC_ICONS[doctor.specialty] || "🏥";
+  const allSpecs = doctor.specialties || [doctor.specialty];
+  const specIcon = SPEC_ICONS[allSpecs[0]] || "🏥";
   const initials = doctor.full_name.split(" ").map((n) => n[0]).join("").slice(0, 2);
-  const specLabel = doctor.specialty.replace("_", " ").replace(/\b\w/g, (c) => c.toUpperCase());
+  const specLabel = allSpecs.map((s) => s.replace("_", " ").replace(/\b\w/g, (c: string) => c.toUpperCase())).join(", ");
 
   return (
     <div className="pt-3 pb-28">
       {/* Back */}
       <motion.button initial={{ opacity: 0, x: -8 }} animate={{ opacity: 1, x: 0 }}
-        onClick={() => router.push("/")}
+        onClick={() => router.push("/doctors")}
         className="flex items-center gap-1.5 text-ink-secondary text-[13px] font-medium mb-5 hover:text-brand-teal transition-colors"
       >
         <svg width="14" height="14" viewBox="0 0 14 14" fill="none"><path d="M9 3L5 7L9 11" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"/></svg>
@@ -139,7 +142,7 @@ export default function DoctorProfile() {
       >
         <div className="max-w-lg mx-auto">
           <button
-            onClick={() => openBotLink(`book_doctor_${doctor.id}`)}
+            onClick={() => router.push(`/book?doctor=${doctor.id}`)}
             disabled={!doctor.is_available}
             className={`w-full py-3.5 rounded-2xl font-display font-bold text-[15px] tracking-[-0.01em] transition-all duration-300 ${
               doctor.is_available

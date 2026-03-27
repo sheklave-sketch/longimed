@@ -14,6 +14,7 @@ from bot.database import Base
 
 class Specialty(str, enum.Enum):
     GENERAL = "general"
+    FAMILY_MEDICINE = "family_medicine"
     PEDIATRICS = "pediatrics"
     OBGYN = "obgyn"
     DERMATOLOGY = "dermatology"
@@ -47,6 +48,7 @@ class Doctor(Base):
     full_name: Mapped[str] = mapped_column(String(200), nullable=False)
     license_number: Mapped[str] = mapped_column(String(100), unique=True, nullable=False)
     specialty: Mapped[Specialty] = mapped_column(Enum(Specialty, values_callable=lambda e: [x.value for x in e]), nullable=False)
+    specialties: Mapped[list[str]] = mapped_column(ARRAY(String), default=list, nullable=True)
     languages: Mapped[list[str]] = mapped_column(ARRAY(String), default=list, nullable=False)
     bio: Mapped[str | None] = mapped_column(Text, nullable=True)
     sex: Mapped[Sex | None] = mapped_column(Enum(Sex, values_callable=lambda e: [x.value for x in e]), nullable=True)

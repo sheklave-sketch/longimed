@@ -9,12 +9,20 @@ import { fetchDoctors, bookSession } from "@/lib/api";
 import type { Doctor } from "@/lib/api";
 
 const SPECIALTIES = [
-  { value: "general", label: "General", icon: "🩺" },
+  { value: "general", label: "General / GP", icon: "🩺" },
+  { value: "family_medicine", label: "Family Medicine", icon: "👨‍👩‍👧‍👦" },
+  { value: "internal_medicine", label: "Internal Medicine", icon: "💊" },
   { value: "pediatrics", label: "Pediatrics", icon: "👶" },
   { value: "obgyn", label: "OB/GYN", icon: "🤰" },
+  { value: "surgery", label: "Surgery", icon: "🔪" },
+  { value: "orthopedics", label: "Orthopedics", icon: "🦴" },
   { value: "dermatology", label: "Dermatology", icon: "🧴" },
   { value: "mental_health", label: "Mental Health", icon: "🧠" },
   { value: "cardiology", label: "Cardiology", icon: "❤️" },
+  { value: "neurology", label: "Neurology", icon: "🧬" },
+  { value: "ent", label: "ENT", icon: "👂" },
+  { value: "ophthalmology", label: "Ophthalmology", icon: "👁️" },
+  { value: "other", label: "Other", icon: "➕" },
 ];
 
 export default function BookPage() {
@@ -63,7 +71,7 @@ function BookConsultation() {
     if (specialty && step >= 3 && !preselectedDoctor) {
       setLoadingDoctors(true);
       fetchDoctors()
-        .then((docs) => setDoctors(docs.filter((d) => d.specialty === specialty && d.is_available)))
+        .then((docs) => setDoctors(docs.filter((d) => (d.specialties || [d.specialty]).includes(specialty) && d.is_available)))
         .catch(() => setDoctors([]))
         .finally(() => setLoadingDoctors(false));
     }
@@ -147,7 +155,7 @@ function BookConsultation() {
     <div className="pt-5 pb-8">
       {/* Back */}
       <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }}>
-        <Link href="/" className="inline-flex items-center gap-1.5 text-[13px] text-ink-secondary hover:text-brand-teal transition-colors mb-5">
+        <Link href="/doctors" className="inline-flex items-center gap-1.5 text-[13px] text-ink-secondary hover:text-brand-teal transition-colors mb-5">
           <svg width="16" height="16" viewBox="0 0 16 16" fill="none"><path d="M10 4L6 8L10 12" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"/></svg>
           Back
         </Link>
