@@ -341,15 +341,20 @@ async def _fallback_to_relay(context, session_id: int, patient_user, doctor_tg_i
 
 
 async def _cleanup_room(bot, room_id: int, patient_tg_id: int | None, doctor_tg_id: int | None) -> None:
-    """Delete messages and kick users from a consultation room."""
+    """Revoke invite links, delete messages, and kick users from a consultation room."""
     import asyncio
+
+    # Revoke all non-primary invite links
+    try:
+        chat = await bot.get_chat(room_id)
+        # Revoke the primary invite link by exporting a new one
+        await bot.export_chat_invite_link(room_id)
+    except Exception as exc:
+        logger.warning("Room cleanup — could not revoke invite links for %s: %s", room_id, exc)
 
     # Delete recent messages (Telegram allows deleting messages < 48h old)
     deleted = 0
     try:
-        # Get recent messages by sending a probe and working backwards
-        # Use deleteMessages batch API — collect message IDs first
-        # Simpler: iterate from the last known message
         probe = await bot.send_message(chat_id=room_id, text="🧹 Cleaning room...")
         probe_id = probe.message_id
 
@@ -448,10 +453,9 @@ async def accept_session_callback(update: Update, context: ContextTypes.DEFAULT_
                         s2.group_chat_id = room_id
                         await db.commit()
 
-                    # Create invite link (2 uses: patient + doctor)
+                    # Create invite link (no member limit — revoked on cleanup)
                     invite = await context.bot.create_chat_invite_link(
                         chat_id=room_id,
-                        member_limit=2,
                         name=f"Session #{session_id}",
                     )
 
@@ -466,17 +470,21 @@ async def accept_session_callback(update: Update, context: ContextTypes.DEFAULT_
                         ),
                     )
 
+                    room_kb = InlineKeyboardMarkup([
+                        [InlineKeyboardButton("🩺 Join Consultation Room", url=invite.invite_link)]
+                    ])
+
                     # Notify patient
                     if patient_user:
                         try:
                             await context.bot.send_message(
                                 chat_id=patient_user.telegram_id,
                                 text=(
-                                    f"✅ Your doctor has accepted the session!\n\n"
-                                    f"👉 Join your consultation room:\n{invite.invite_link}\n\n"
-                                    f"Chat directly with your doctor there.\n"
-                                    f"Use /end here when the session is complete."
+                                    "✅ Your doctor has accepted the session!\n\n"
+                                    "Chat directly with your doctor in the consultation room.\n"
+                                    "Use /end here when the session is complete."
                                 ),
+                                reply_markup=room_kb,
                             )
                         except Exception as exc:
                             logger.error("Failed to notify patient with room link: %s", exc)
@@ -487,9 +495,10 @@ async def accept_session_callback(update: Update, context: ContextTypes.DEFAULT_
                             chat_id=update.effective_user.id,
                             text=(
                                 f"✅ Session #{session_id} is now active.\n\n"
-                                f"👉 Join the consultation room:\n{invite.invite_link}\n\n"
-                                f"Use /end here when the consultation is complete."
+                                "Join the consultation room to chat with your patient.\n"
+                                "Use /end here when the consultation is complete."
                             ),
+                            reply_markup=room_kb,
                         )
                     except Exception as exc:
                         logger.error("Failed to send room link to doctor: %s", exc)
