@@ -733,14 +733,19 @@ async def handle_confirm_payment(update: Update, context: ContextTypes.DEFAULT_T
     try:
         await context.bot.send_message(
             chat_id=target_tg_id,
-            text=f"✅ Your payment of {amount} ETB has been confirmed! Your session is now approved.",
+            text=f"✅ Your payment of {amount} ETB has been confirmed! Your session is now approved.\n\nWaiting for your doctor to accept...",
         )
     except Exception:
         pass
 
+    # Notify doctor with Accept/Decline buttons + start timeout timer
+    if session_id:
+        await _notify_doctor_new_session(context, session_id, "en")
+        await _start_doctor_timer(context, session_id)
+
     await query.edit_message_text(
         f"✅ Payment confirmed — {amount} ETB from user {target_tg_id}."
-        + (f" Session #{session_id} approved." if session_id else "")
+        + (f" Session #{session_id} approved. Doctor notified." if session_id else "")
     )
 
 
