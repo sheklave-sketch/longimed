@@ -10,7 +10,7 @@ from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup
 from telegram.ext import CommandHandler, CallbackQueryHandler, ContextTypes
 
 from bot.database import session_factory
-from bot.models.session import Session as ConsultSession, SessionStatus
+from bot.models.session import Session as ConsultSession, SessionStatus, SessionMode
 from bot.models.doctor import Doctor
 from bot.models.user import User
 from bot.models.relay_message import RelayMessage, SenderRole
@@ -299,7 +299,10 @@ async def accept_session_callback(update: Update, context: ContextTypes.DEFAULT_
             s.status = SessionStatus.ACTIVE
             s.started_at = datetime.now(timezone.utc)
             patient_user = await session.get(User, s.user_id)
-            is_relay = s.session_mode.value == "relay"
+            is_relay = s.session_mode == SessionMode.RELAY
+            is_topic = s.session_mode == SessionMode.TOPIC
+            issue_desc = s.issue_description[:100]
+            doctor_name = doctor.full_name
             await session.commit()
 
         await query.edit_message_text(
@@ -307,10 +310,125 @@ async def accept_session_callback(update: Update, context: ContextTypes.DEFAULT_
             reply_markup=back_btn,
         )
 
-        # Notify patient
-        if patient_user:
+        # ── TOPIC mode: create forum topic + send invite links ──
+        if is_topic and settings.discussion_group_id:
             try:
-                if is_relay:
+                topic = await context.bot.create_forum_topic(
+                    chat_id=settings.discussion_group_id,
+                    name=f"Session #{session_id} — {issue_desc}",
+                )
+                topic_id = topic.message_thread_id
+
+                # Save topic info on session
+                async with session_factory() as db:
+                    s2 = await db.get(ConsultSession, session_id)
+                    s2.topic_id = topic_id
+                    s2.group_chat_id = settings.discussion_group_id
+                    await db.commit()
+
+                # Send welcome message inside the topic
+                patient_name = "Patient"
+                if patient_user and patient_user.telegram_id:
+                    try:
+                        member = await context.bot.get_chat_member(
+                            settings.discussion_group_id, patient_user.telegram_id
+                        )
+                        patient_name = member.user.first_name or "Patient"
+                    except Exception:
+                        patient_name = "Patient"
+
+                await context.bot.send_message(
+                    chat_id=settings.discussion_group_id,
+                    message_thread_id=topic_id,
+                    text=(
+                        f"🩺 Consultation Session #{session_id}\n\n"
+                        f"Doctor: Dr. {doctor_name}\n"
+                        f"Topic: {issue_desc}\n\n"
+                        f"Both parties can chat here. Use /end when done."
+                    ),
+                )
+
+                # Create invite link for users who might not be in the group
+                invite = await context.bot.create_chat_invite_link(
+                    chat_id=settings.discussion_group_id,
+                    member_limit=2,
+                    name=f"Session #{session_id}",
+                )
+
+                # Build the topic deep link
+                # Private supergroup IDs are -100xxx; strip -100 prefix for link
+                group_id_str = str(settings.discussion_group_id)
+                if group_id_str.startswith("-100"):
+                    link_id = group_id_str[4:]
+                else:
+                    link_id = group_id_str.lstrip("-")
+                topic_link = f"https://t.me/c/{link_id}/{topic_id}"
+
+                # Notify patient with link
+                if patient_user:
+                    try:
+                        await context.bot.send_message(
+                            chat_id=patient_user.telegram_id,
+                            text=(
+                                f"✅ Your doctor has accepted the session!\n\n"
+                                f"👉 Join the discussion here:\n{topic_link}\n\n"
+                                f"If you can't open the link, join the group first:\n"
+                                f"{invite.invite_link}\n\n"
+                                f"Then open the discussion link above."
+                            ),
+                        )
+                    except Exception as exc:
+                        logger.error("Failed to notify patient with topic link: %s", exc)
+
+                # Notify doctor with link
+                try:
+                    await context.bot.send_message(
+                        chat_id=update.effective_user.id,
+                        text=(
+                            f"✅ Session #{session_id} is now active.\n\n"
+                            f"👉 Discussion thread:\n{topic_link}\n\n"
+                            f"If you can't open the link, join the group first:\n"
+                            f"{invite.invite_link}\n\n"
+                            f"Use /end when the consultation is complete."
+                        ),
+                    )
+                except Exception as exc:
+                    logger.error("Failed to send topic link to doctor: %s", exc)
+
+            except Exception as exc:
+                logger.error("Failed to create forum topic for session #%d: %s", session_id, exc, exc_info=True)
+                # Fallback: tell both to use relay instead
+                if patient_user:
+                    try:
+                        await context.bot.send_message(
+                            chat_id=patient_user.telegram_id,
+                            text=(
+                                "✅ Your doctor has accepted the session!\n\n"
+                                "⚠️ Could not create discussion thread. "
+                                "Send your messages here and the bot will relay them.\n\n"
+                                "Use /end when you're done."
+                            ),
+                        )
+                    except Exception:
+                        pass
+                # Switch session to relay as fallback
+                async with session_factory() as db:
+                    s2 = await db.get(ConsultSession, session_id)
+                    s2.session_mode = SessionMode.RELAY
+                    await db.commit()
+                logger.info("Session #%d fell back to RELAY mode", session_id)
+
+        # ── RELAY mode: send relay instructions ──
+        elif is_relay or (is_topic and not settings.discussion_group_id):
+            if is_topic and not settings.discussion_group_id:
+                logger.warning("TOPIC session #%d but discussion_group_id not configured — falling back to RELAY", session_id)
+                async with session_factory() as db:
+                    s2 = await db.get(ConsultSession, session_id)
+                    s2.session_mode = SessionMode.RELAY
+                    await db.commit()
+
+            if patient_user:
+                try:
                     await context.bot.send_message(
                         chat_id=patient_user.telegram_id,
                         text=(
@@ -320,19 +438,9 @@ async def accept_session_callback(update: Update, context: ContextTypes.DEFAULT_
                             "Use /end when you're done."
                         ),
                     )
-                else:
-                    await context.bot.send_message(
-                        chat_id=patient_user.telegram_id,
-                        text=(
-                            "Your doctor has accepted the session!\n\n"
-                            "Use /end when you're done."
-                        ),
-                    )
-            except Exception as exc:
-                logger.error("Failed to notify patient of acceptance: %s", exc)
+                except Exception as exc:
+                    logger.error("Failed to notify patient of acceptance: %s", exc)
 
-        # If relay, also instruct the doctor
-        if is_relay:
             try:
                 await context.bot.send_message(
                     chat_id=update.effective_user.id,
