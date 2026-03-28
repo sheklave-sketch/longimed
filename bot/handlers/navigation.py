@@ -463,16 +463,21 @@ async def confirm_end_callback(update: Update, context: ContextTypes.DEFAULT_TYP
 # ── Consultation room helpers ────────────────────────────────────────────
 
 async def _find_available_room(session_id: int) -> int | None:
-    """Find a consultation room not currently used by an active session."""
+    """Find a consultation room not currently used by any non-resolved session."""
     room_ids = settings.room_ids
     if not room_ids:
         return None
 
     async with session_factory() as session:
+        # Check ALL sessions with a room assigned that aren't finished
         result = await session.execute(
             select(ConsultSession.group_chat_id).where(
-                ConsultSession.status == SessionStatus.ACTIVE,
                 ConsultSession.group_chat_id.isnot(None),
+                ConsultSession.status.notin_([
+                    SessionStatus.RESOLVED,
+                    SessionStatus.CANCELLED,
+                    SessionStatus.EXPIRED,
+                ]),
             )
         )
         occupied = {row[0] for row in result.all()}
