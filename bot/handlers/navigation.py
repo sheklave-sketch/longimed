@@ -791,12 +791,23 @@ async def decline_session_callback(update: Update, context: ContextTypes.DEFAULT
 
             # Mark as awaiting — the timeout job will reassign
             patient_user = await session.get(User, s.user_id)
+            declined_doctor_id = s.doctor_id
 
         await query.edit_message_text(
             f"Session #{session_id} declined. It will be reassigned to another doctor.",
             reply_markup=back_btn,
         )
 
+        # Cancel existing timeout job and trigger immediate reassignment
+        jobs = context.job_queue.get_jobs_by_name(f"doctor_timeout_{session_id}")
+        for job in jobs:
+            job.schedule_removal()
+        # Also cancel retry jobs
+        for i in range(2, 5):
+            for job in context.job_queue.get_jobs_by_name(f"doctor_timeout_{session_id}_r{i}"):
+                job.schedule_removal()
+
+        # Notify patient once and start reassignment
         if patient_user:
             try:
                 await context.bot.send_message(
@@ -805,6 +816,15 @@ async def decline_session_callback(update: Update, context: ContextTypes.DEFAULT
                 )
             except Exception:
                 pass
+
+        # Trigger immediate reassignment (attempt=2 to skip patient re-notification since we just notified)
+        from bot.handlers.private_session import _check_doctor_response
+        context.job_queue.run_once(
+            _check_doctor_response,
+            when=5,  # near-instant
+            data={"session_id": session_id, "attempt": 2, "tried_doctors": [declined_doctor_id]},
+            name=f"doctor_timeout_{session_id}_decline",
+        )
 
     except Exception as exc:
         logger.error("Error declining session: %s", exc, exc_info=True)

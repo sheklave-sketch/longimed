@@ -571,11 +571,16 @@ async def _start_doctor_timer(context, session_id: int) -> None:
     context.job_queue.run_once(
         _check_doctor_response,
         when=settings.doctor_response_timeout_mins * 60,
-        data={"session_id": session_id},
+        data={"session_id": session_id, "attempt": 1},
         name=f"doctor_timeout_{session_id}",
     )
+
+_MAX_REASSIGN_ATTEMPTS = 3
+_ADMIN_ESCALATION_INTERVAL = 300  # 5 minutes
+
 async def _check_doctor_response(context: ContextTypes.DEFAULT_TYPE) -> None:
     session_id = context.job.data["session_id"]
+    attempt = context.job.data.get("attempt", 1)
 
     from bot.database import session_factory
     from bot.models.session import Session, SessionStatus
@@ -588,15 +593,20 @@ async def _check_doctor_response(context: ContextTypes.DEFAULT_TYPE) -> None:
         if not s or s.status != SessionStatus.AWAITING_DOCTOR:
             return
 
-        # Auto-reassign: find another available doctor in same specialty
         current_doctor_id = s.doctor_id
-        result = await session.execute(
-            select(Doctor).where(
-                Doctor.is_verified.is_(True),
-                Doctor.is_available.is_(True),
-                Doctor.id != current_doctor_id,
-            )
+        # Find all doctors we've already tried (stored in job data)
+        tried_doctors = set(context.job.data.get("tried_doctors", []))
+        if current_doctor_id:
+            tried_doctors.add(current_doctor_id)
+
+        # Find another available doctor not yet tried
+        query = select(Doctor).where(
+            Doctor.is_verified.is_(True),
+            Doctor.is_available.is_(True),
         )
+        if tried_doctors:
+            query = query.where(Doctor.id.notin_(tried_doctors))
+        result = await session.execute(query)
         next_doctor = result.scalars().first()
 
         patient = await session.get(User, s.user_id)
@@ -619,8 +629,8 @@ async def _check_doctor_response(context: ContextTypes.DEFAULT_TYPE) -> None:
             except Exception:
                 pass
 
-            # Notify patient
-            if patient:
+            # Notify patient ONLY on the first reassignment
+            if attempt == 1 and patient:
                 try:
                     await context.bot.send_message(
                         chat_id=patient.telegram_id,
@@ -629,36 +639,95 @@ async def _check_doctor_response(context: ContextTypes.DEFAULT_TYPE) -> None:
                 except Exception:
                     pass
 
-            # Restart timer for new doctor
-            context.job_queue.run_once(
-                _check_doctor_response,
-                when=600,
-                data={"session_id": session_id},
-                name=f"doctor_timeout_{session_id}_retry",
-            )
+            # Restart timer for new doctor (up to max attempts)
+            if attempt < _MAX_REASSIGN_ATTEMPTS:
+                context.job_queue.run_once(
+                    _check_doctor_response,
+                    when=600,
+                    data={
+                        "session_id": session_id,
+                        "attempt": attempt + 1,
+                        "tried_doctors": list(tried_doctors),
+                    },
+                    name=f"doctor_timeout_{session_id}_r{attempt + 1}",
+                )
+            else:
+                # Max attempts reached — escalate to admin
+                await _escalate_long_wait(context, session_id, patient)
         else:
-            # No doctors available — notify admin + patient
-            s.status = SessionStatus.CANCELLED
-            await session.commit()
+            # No doctors available — escalate to admin instead of cancelling
+            await _escalate_long_wait(context, session_id, patient)
 
-            if patient:
-                try:
-                    await context.bot.send_message(
-                        chat_id=patient.telegram_id,
-                        text="No doctors are available right now. 😔 Your session has been cancelled. You won't be charged.",
-                    )
-                except Exception:
-                    pass
 
-            from bot.config import settings
-            for admin_id in settings.admin_ids:
-                try:
-                    await context.bot.send_message(
-                        chat_id=admin_id,
-                        text=f"⚠️ Session #{session_id} cancelled — no doctors responded.",
-                    )
-                except Exception:
-                    pass
+async def _escalate_long_wait(context, session_id: int, patient) -> None:
+    """Notify patient once and alert admins that a session needs intervention."""
+    from bot.config import settings
+
+    # Tell patient we're working on it (one message, not a loop)
+    if patient:
+        try:
+            await context.bot.send_message(
+                chat_id=patient.telegram_id,
+                text=(
+                    "All our doctors are currently busy. We've notified our team "
+                    "and someone will be with you shortly. Thank you for your patience. 🙏"
+                ),
+            )
+        except Exception:
+            pass
+
+    # Alert admins — they need to intervene
+    for admin_id in settings.admin_ids:
+        try:
+            await context.bot.send_message(
+                chat_id=admin_id,
+                text=(
+                    f"🚨 Session #{session_id} needs intervention — patient has been "
+                    f"waiting 5+ minutes and no doctor has responded. "
+                    f"Please assign a doctor manually or contact the patient."
+                ),
+            )
+        except Exception:
+            pass
+
+    # Schedule a follow-up admin reminder if still unresolved after 5 more minutes
+    context.job_queue.run_once(
+        _admin_followup_reminder,
+        when=_ADMIN_ESCALATION_INTERVAL,
+        data={"session_id": session_id},
+        name=f"admin_reminder_{session_id}",
+    )
+
+
+async def _admin_followup_reminder(context: ContextTypes.DEFAULT_TYPE) -> None:
+    """Remind admins if session is still stuck in AWAITING_DOCTOR."""
+    session_id = context.job.data["session_id"]
+
+    from bot.database import session_factory
+    from bot.models.session import Session, SessionStatus
+
+    async with session_factory() as session:
+        s = await session.get(Session, session_id)
+        if not s or s.status != SessionStatus.AWAITING_DOCTOR:
+            return  # Session resolved, stop reminding
+
+    from bot.config import settings
+    for admin_id in settings.admin_ids:
+        try:
+            await context.bot.send_message(
+                chat_id=admin_id,
+                text=f"⏰ Reminder: Session #{session_id} is STILL waiting for a doctor. Patient is waiting.",
+            )
+        except Exception:
+            pass
+
+    # Keep reminding every 5 minutes until resolved
+    context.job_queue.run_once(
+        _admin_followup_reminder,
+        when=_ADMIN_ESCALATION_INTERVAL,
+        data={"session_id": session_id},
+        name=f"admin_reminder_{session_id}",
+    )
 async def _notify_admin_pending_payment(context, session_id: int, telegram_id: int, lang: str) -> None:
     from bot.config import settings
     from telegram import InlineKeyboardButton, InlineKeyboardMarkup
