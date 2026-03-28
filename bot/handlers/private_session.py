@@ -387,6 +387,7 @@ async def relay_patient_message(update: Update, context: ContextTypes.DEFAULT_TY
 
         if not active_session or not active_session.doctor_id:
             return
+        logger.info("relay_patient_message: session=%d, room=%s", active_session.id, active_session.group_chat_id)
 
         msg = RelayMessage(
             session_id=active_session.id,
@@ -429,6 +430,7 @@ async def relay_doctor_message(update: Update, context: ContextTypes.DEFAULT_TYP
 
     in_group = update.effective_chat.type in ("group", "supergroup")
     chat_id = update.effective_chat.id
+    logger.info("relay_doctor_message: in_group=%s, chat_id=%s, user=%s", in_group, chat_id, update.effective_user.id)
 
     async with session_factory() as session:
         if in_group:
