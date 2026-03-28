@@ -366,7 +366,8 @@ async def confirm_session(update: Update, context: ContextTypes.DEFAULT_TYPE) ->
 # ── Relay mode: forward messages ──────────────────────────────────────────
 
 async def relay_patient_message(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
-    """Forward patient message to doctor via relay (anonymous sessions)."""
+    """Forward patient message to doctor via relay (anonymous sessions).
+    If session has a room, forward to the room instead of doctor's DM."""
     from bot.database import session_factory
     from bot.models.session import Session, SessionStatus, SessionMode
     from bot.models.relay_message import RelayMessage, SenderRole
@@ -387,7 +388,6 @@ async def relay_patient_message(update: Update, context: ContextTypes.DEFAULT_TY
         if not active_session or not active_session.doctor_id:
             return
 
-        # Store message
         msg = RelayMessage(
             session_id=active_session.id,
             sender_role=SenderRole.PATIENT,
@@ -399,37 +399,27 @@ async def relay_patient_message(update: Update, context: ContextTypes.DEFAULT_TY
         session.add(msg)
         await session.commit()
 
-        # Get doctor telegram_id
+        room_id = active_session.group_chat_id
         from bot.models.doctor import Doctor
         doctor = await session.get(Doctor, active_session.doctor_id)
 
-    if doctor:
-        prefix = "👤 Patient:"
-        if update.message.text:
-            await context.bot.send_message(
-                chat_id=doctor.telegram_id,
-                text=f"{prefix}\n{update.message.text}",
-            )
-        elif update.message.photo:
-            await context.bot.send_photo(
-                chat_id=doctor.telegram_id,
-                photo=update.message.photo[-1].file_id,
-                caption=f"{prefix} [Photo]",
-            )
-        elif update.message.voice:
-            await context.bot.send_voice(
-                chat_id=doctor.telegram_id,
-                voice=update.message.voice.file_id,
-                caption=prefix,
-            )
-        elif update.message.document:
-            await context.bot.send_document(
-                chat_id=doctor.telegram_id,
-                document=update.message.document.file_id,
-                caption=prefix,
-            )
+    # Decide where to forward: room (if doctor is in a room) or doctor's DM
+    target_chat = room_id if room_id else (doctor.telegram_id if doctor else None)
+    if not target_chat:
+        return
+
+    prefix = "👤 Patient:"
+    if update.message.text:
+        await context.bot.send_message(chat_id=target_chat, text=f"{prefix}\n{update.message.text}")
+    elif update.message.photo:
+        await context.bot.send_photo(chat_id=target_chat, photo=update.message.photo[-1].file_id, caption=f"{prefix} [Photo]")
+    elif update.message.voice:
+        await context.bot.send_voice(chat_id=target_chat, voice=update.message.voice.file_id, caption=prefix)
+    elif update.message.document:
+        await context.bot.send_document(chat_id=target_chat, document=update.message.document.file_id, caption=prefix)
 async def relay_doctor_message(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
-    """Forward doctor message to patient via relay (anonymous sessions)."""
+    """Forward doctor message to patient via relay (anonymous sessions).
+    Catches messages from both doctor's DM and from the consultation room."""
     from bot.database import session_factory
     from bot.models.session import Session, SessionStatus, SessionMode
     from bot.models.relay_message import RelayMessage, SenderRole
@@ -437,20 +427,41 @@ async def relay_doctor_message(update: Update, context: ContextTypes.DEFAULT_TYP
     from bot.models.user import User
     from sqlalchemy import select
 
+    in_group = update.effective_chat.type in ("group", "supergroup")
+    chat_id = update.effective_chat.id
+
     async with session_factory() as session:
-        # Find active relay session for this doctor
-        result = await session.execute(
-            select(Session).where(
-                Session.status == SessionStatus.ACTIVE,
-                Session.session_mode == SessionMode.RELAY,
-            ).join(Doctor, Session.doctor_id == Doctor.id).where(
-                Doctor.telegram_id == update.effective_user.id
+        if in_group:
+            # Message from the consultation room — find relay session by room
+            result = await session.execute(
+                select(Session).where(
+                    Session.status == SessionStatus.ACTIVE,
+                    Session.session_mode == SessionMode.RELAY,
+                    Session.group_chat_id == chat_id,
+                )
             )
-        )
+        else:
+            # Message from doctor's private DM
+            result = await session.execute(
+                select(Session).where(
+                    Session.status == SessionStatus.ACTIVE,
+                    Session.session_mode == SessionMode.RELAY,
+                ).join(Doctor, Session.doctor_id == Doctor.id).where(
+                    Doctor.telegram_id == update.effective_user.id
+                )
+            )
         active_session = result.scalar_one_or_none()
 
         if not active_session:
             return
+
+        # If in group, verify sender is the doctor (not the bot relaying patient messages)
+        if in_group:
+            if update.effective_user.is_bot:
+                return  # Ignore bot's own relayed messages
+            doc = await session.get(Doctor, active_session.doctor_id) if active_session.doctor_id else None
+            if not doc or doc.telegram_id != update.effective_user.id:
+                return  # Not the doctor for this session
 
         msg = RelayMessage(
             session_id=active_session.id,
@@ -468,26 +479,13 @@ async def relay_doctor_message(update: Update, context: ContextTypes.DEFAULT_TYP
     if user:
         prefix = "👨‍⚕️ Doctor:"
         if update.message.text:
-            await context.bot.send_message(
-                chat_id=user.telegram_id,
-                text=f"{prefix}\n{update.message.text}",
-            )
+            await context.bot.send_message(chat_id=user.telegram_id, text=f"{prefix}\n{update.message.text}")
         elif update.message.photo:
-            await context.bot.send_photo(
-                chat_id=user.telegram_id,
-                photo=update.message.photo[-1].file_id,
-                caption=f"{prefix} [Photo]",
-            )
+            await context.bot.send_photo(chat_id=user.telegram_id, photo=update.message.photo[-1].file_id, caption=f"{prefix} [Photo]")
         elif update.message.voice:
-            await context.bot.send_voice(
-                chat_id=user.telegram_id,
-                voice=update.message.voice.file_id,
-                caption=prefix,
-            )
+            await context.bot.send_voice(chat_id=user.telegram_id, voice=update.message.voice.file_id, caption=prefix)
         elif update.message.document:
-            await context.bot.send_document(
-                chat_id=user.telegram_id,
-                document=update.message.document.file_id,
+            await context.bot.send_document(chat_id=user.telegram_id, document=update.message.document.file_id,
                 caption=prefix,
             )
 # ── Rating callback ───────────────────────────────────────────────────────

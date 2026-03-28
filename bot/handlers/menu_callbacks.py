@@ -73,8 +73,11 @@ async def _doc_set_availability(query, telegram_id: int, available: bool) -> Non
 
 async def _doc_queue(query, telegram_id: int) -> None:
     from bot.models.doctor import Doctor
-    from bot.models.session import Session as CS, SessionStatus
+    from bot.models.session import Session as CS, SessionStatus, SessionMode
+    from bot.models.user import User
+    from bot.config import settings
     from sqlalchemy import select
+
     async with session_factory() as session:
         result = await session.execute(
             select(Doctor).where(Doctor.telegram_id == telegram_id)
@@ -87,21 +90,94 @@ async def _doc_queue(query, telegram_id: int) -> None:
             select(CS).where(
                 CS.doctor_id == doctor.id,
                 CS.status.in_([SessionStatus.AWAITING_DOCTOR, SessionStatus.ACTIVE]),
-            )
+            ).order_by(CS.created_at.desc())
         )
         sessions = s_result.scalars().all()
 
-    back_btn = InlineKeyboardMarkup([[InlineKeyboardButton("\u2190 Back to Menu", callback_data="backtomenu")]])
+    buttons = [[InlineKeyboardButton("← Back to Menu", callback_data="backtomenu")]]
 
     if not sessions:
-        await query.edit_message_text("📋 Your Queue\n\nNo pending sessions.", reply_markup=back_btn)
+        await query.edit_message_text("📋 Your Queue\n\nNo pending sessions.",
+                                       reply_markup=InlineKeyboardMarkup(buttons))
         return
 
-    lines = ["📋 Your Queue\n"]
+    lines = ["📋 *Your Queue*\n"]
+    action_buttons = []
     for s in sessions:
-        status = s.status.value if hasattr(s.status, 'value') else s.status
-        lines.append(f"  #{s.id} — {status} — {s.issue_description[:40]}...")
-    await query.edit_message_text("\n".join(lines), reply_markup=back_btn)
+        status_val = s.status.value if hasattr(s.status, 'value') else s.status
+        mode = "🔒" if s.session_mode == SessionMode.RELAY else "👥"
+        issue = s.issue_description[:50].replace("*", "").replace("_", "")
+        lines.append(f"{mode} *#{s.id}* — _{status_val}_\n  {issue}...")
+
+        if s.status == SessionStatus.AWAITING_DOCTOR:
+            action_buttons.append([
+                InlineKeyboardButton(f"✅ Accept #{s.id}", callback_data=f"accept_session:{s.id}"),
+                InlineKeyboardButton(f"❌ Decline", callback_data=f"decline_session:{s.id}"),
+            ])
+        elif s.status == SessionStatus.ACTIVE and s.group_chat_id:
+            # Room session — provide join link
+            action_buttons.append([
+                InlineKeyboardButton(f"🩺 Join Room #{s.id}", callback_data=f"join_room:{s.id}"),
+            ])
+        elif s.status == SessionStatus.ACTIVE and not s.group_chat_id:
+            # Relay session — just show info
+            action_buttons.append([
+                InlineKeyboardButton(f"💬 Relay #{s.id} — type here", callback_data=f"noop:{s.id}"),
+            ])
+
+    await query.edit_message_text(
+        "\n".join(lines),
+        reply_markup=InlineKeyboardMarkup(action_buttons + buttons),
+        parse_mode="Markdown",
+    )
+
+
+async def handle_join_room(update, context) -> None:
+    """Send the doctor a fresh invite link for their active room session."""
+    query = update.callback_query
+    await query.answer()
+
+    session_id = int(query.data.split(":")[1])
+
+    from bot.models.session import Session as CS, SessionStatus
+    from bot.models.doctor import Doctor
+    from sqlalchemy import select
+
+    async with session_factory() as session:
+        s = await session.get(CS, session_id)
+        if not s or s.status != SessionStatus.ACTIVE or not s.group_chat_id:
+            await query.answer("Session not active or no room assigned.", show_alert=True)
+            return
+
+        doc_result = await session.execute(
+            select(Doctor).where(Doctor.telegram_id == update.effective_user.id)
+        )
+        doctor = doc_result.scalar_one_or_none()
+        if not doctor or doctor.id != s.doctor_id:
+            await query.answer("This session is not yours.", show_alert=True)
+            return
+
+        room_id = s.group_chat_id
+
+    # Unban doctor in case they were banned from a previous session
+    try:
+        await context.bot.unban_chat_member(chat_id=room_id, user_id=update.effective_user.id)
+    except Exception:
+        pass
+
+    invite = await context.bot.create_chat_invite_link(
+        chat_id=room_id, name=f"Doctor rejoin #{session_id}",
+    )
+
+    from bot.i18n import t
+    room_kb = InlineKeyboardMarkup([
+        [InlineKeyboardButton(t("room_join_button", "en"), url=invite.invite_link)]
+    ])
+    await context.bot.send_message(
+        chat_id=update.effective_user.id,
+        text=f"🩺 Session #{session_id} — join the consultation room:",
+        reply_markup=room_kb,
+    )
 
 
 async def _doc_waitlist(query, telegram_id: int) -> None:

@@ -58,9 +58,10 @@ def register_handlers(app: Application) -> None:
     # These fire at group 0 but only when user_data has the right key (checked inside handler)
 
     # Doctor menu buttons
-    from bot.handlers.menu_callbacks import handle_doc_menu, handle_patient_menu
+    from bot.handlers.menu_callbacks import handle_doc_menu, handle_patient_menu, handle_join_room
     app.add_handler(CallbackQueryHandler(handle_doc_menu, pattern=r"^doc:"), group=0)
     app.add_handler(CallbackQueryHandler(handle_patient_menu, pattern=r"^menu:(history|settings|browse|call)$"), group=0)
+    app.add_handler(CallbackQueryHandler(handle_join_room, pattern=r"^join_room:\d+$"), group=0)
 
     # Language change (from Settings or onboarding fallback)
     from bot.handlers.menu_callbacks import handle_language_change
@@ -162,6 +163,11 @@ def register_handlers(app: Application) -> None:
     app.add_handler(
         MessageHandler(filters.ChatType.PRIVATE & (filters.TEXT | filters.PHOTO | filters.VOICE | filters.Document.ALL) & ~filters.COMMAND, relay_doctor_message),
         group=12,
+    )
+    # Group relay: doctor messages in consultation rooms → relay to patient
+    app.add_handler(
+        MessageHandler(filters.ChatType.GROUPS & (filters.TEXT | filters.PHOTO | filters.VOICE | filters.Document.ALL) & ~filters.COMMAND, relay_doctor_message),
+        group=13,
     )
 
     logger.info("All handlers registered.")

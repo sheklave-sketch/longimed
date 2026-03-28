@@ -305,13 +305,15 @@ async def end_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> Non
                     t("room_end_waiting", lang), reply_markup=back_btn,
                 )
 
+                confirm_kb = InlineKeyboardMarkup([
+                    [InlineKeyboardButton(
+                        t("room_end_confirm_button", patient_lang),
+                        callback_data=f"confirm_end:{session_id}",
+                    )],
+                ])
+
                 if room_id:
-                    confirm_kb = InlineKeyboardMarkup([
-                        [InlineKeyboardButton(
-                            t("room_end_confirm_button", patient_lang),
-                            callback_data=f"confirm_end:{session_id}",
-                        )],
-                    ])
+                    # Send confirm button in the consultation room
                     try:
                         await context.bot.send_message(
                             chat_id=room_id,
@@ -320,6 +322,23 @@ async def end_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> Non
                         )
                     except Exception as exc:
                         logger.error("Failed to send confirm button in room: %s", exc)
+                else:
+                    # Relay session — send confirm button to the other party's DM
+                    other_tg_id = None
+                    if is_doctor_ending and patient_user:
+                        other_tg_id = patient_user.telegram_id
+                    elif not is_doctor_ending and doctor_obj and doctor_obj.telegram_id:
+                        other_tg_id = doctor_obj.telegram_id
+
+                    if other_tg_id:
+                        try:
+                            await context.bot.send_message(
+                                chat_id=other_tg_id,
+                                text=t("room_end_request", patient_lang if is_doctor_ending else "en", who=who_ended),
+                                reply_markup=confirm_kb,
+                            )
+                        except Exception as exc:
+                            logger.error("Failed to send confirm button to other party: %s", exc)
 
     except Exception as exc:
         logger.error("Error in /end command: %s", exc, exc_info=True)
@@ -658,8 +677,75 @@ async def accept_session_callback(update: Update, context: ContextTypes.DEFAULT_
                 logger.warning("No rooms available for session #%d — falling back to relay", session_id)
                 await _fallback_to_relay(context, session_id, patient_user, update.effective_user.id)
 
-        # ── RELAY mode: send relay instructions ──
+        # ── RELAY mode: patient stays in bot, doctor gets a room ──
         elif is_relay:
+            # Try to assign a room for the doctor
+            room_id = await _find_available_room(session_id) if settings.room_ids else None
+
+            if room_id:
+                try:
+                    async with session_factory() as db:
+                        s2 = await db.get(ConsultSession, session_id)
+                        s2.group_chat_id = room_id
+                        await db.commit()
+
+                    # Unban doctor from previous sessions
+                    try:
+                        await context.bot.unban_chat_member(chat_id=room_id, user_id=update.effective_user.id)
+                    except Exception:
+                        pass
+
+                    invite = await context.bot.create_chat_invite_link(
+                        chat_id=room_id, name=f"Relay #{session_id}",
+                    )
+
+                    # Room intro for doctor
+                    await context.bot.send_message(
+                        chat_id=room_id,
+                        text=(
+                            f"🩺 *Anonymous Session #{session_id}*\n\n"
+                            f"👨‍⚕️ *Doctor:* Dr. {doctor_name}\n"
+                            f"📋 *Topic:* {issue_desc}\n\n"
+                            f"The patient is anonymous. Type your messages here — "
+                            f"the bot will relay them to the patient.\n"
+                            f"Patient messages will appear here as 👤 Patient.\n\n"
+                            f"⏹ Use /end when the session is complete."
+                        ),
+                        parse_mode="Markdown",
+                    )
+
+                    room_kb = InlineKeyboardMarkup([
+                        [InlineKeyboardButton(t("room_join_button", "en"), url=invite.invite_link)]
+                    ])
+
+                    await context.bot.send_message(
+                        chat_id=update.effective_user.id,
+                        text=t("relay_doctor_instructions", "en"),
+                        reply_markup=room_kb,
+                    )
+
+                    logger.info("Relay session #%d — doctor assigned to room %s", session_id, room_id)
+                except Exception as exc:
+                    logger.error("Failed to set up relay room for session #%d: %s", session_id, exc, exc_info=True)
+                    # Fallback: pure DM relay
+                    try:
+                        await context.bot.send_message(
+                            chat_id=update.effective_user.id,
+                            text=t("relay_doctor_instructions", "en"),
+                        )
+                    except Exception:
+                        pass
+            else:
+                # No rooms available — pure DM relay
+                try:
+                    await context.bot.send_message(
+                        chat_id=update.effective_user.id,
+                        text=t("relay_doctor_instructions", "en"),
+                    )
+                except Exception as exc:
+                    logger.error("Failed to send relay instructions to doctor: %s", exc)
+
+            # Always notify patient (they stay in bot DM)
             if patient_user:
                 try:
                     await context.bot.send_message(
@@ -668,14 +754,6 @@ async def accept_session_callback(update: Update, context: ContextTypes.DEFAULT_
                     )
                 except Exception as exc:
                     logger.error("Failed to notify patient of acceptance: %s", exc)
-
-            try:
-                await context.bot.send_message(
-                    chat_id=update.effective_user.id,
-                    text=t("relay_doctor_instructions", "en"),
-                )
-            except Exception as exc:
-                logger.error("Failed to send relay instructions to doctor: %s", exc)
 
         # ── TOPIC mode but no rooms configured — fallback ──
         elif is_topic and not settings.room_ids:
