@@ -101,13 +101,13 @@ async def _doc_queue(query, telegram_id: int) -> None:
                                        reply_markup=InlineKeyboardMarkup(buttons))
         return
 
-    lines = ["📋 *Your Queue*\n"]
+    lines = ["📋 Your Queue\n"]
     action_buttons = []
     for s in sessions:
         status_val = s.status.value if hasattr(s.status, 'value') else s.status
         mode = "🔒" if s.session_mode == SessionMode.RELAY else "👥"
-        issue = s.issue_description[:50].replace("*", "").replace("_", "")
-        lines.append(f"{mode} *#{s.id}* — _{status_val}_\n  {issue}...")
+        issue = s.issue_description[:50]
+        lines.append(f"{mode} #{s.id} — {status_val}\n  {issue}...")
 
         if s.status == SessionStatus.AWAITING_DOCTOR:
             action_buttons.append([
@@ -128,7 +128,6 @@ async def _doc_queue(query, telegram_id: int) -> None:
     await query.edit_message_text(
         "\n".join(lines),
         reply_markup=InlineKeyboardMarkup(action_buttons + buttons),
-        parse_mode="Markdown",
     )
 
 
