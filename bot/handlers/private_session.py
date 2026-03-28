@@ -457,13 +457,13 @@ async def relay_doctor_message(update: Update, context: ContextTypes.DEFAULT_TYP
         if not active_session:
             return
 
-        # If in group, verify sender is the doctor (not the bot relaying patient messages)
+        # If in group, only ignore messages from OUR bot (relayed patient messages)
         if in_group:
-            if update.effective_user.is_bot:
-                return  # Ignore bot's own relayed messages
-            doc = await session.get(Doctor, active_session.doctor_id) if active_session.doctor_id else None
-            if not doc or doc.telegram_id != update.effective_user.id:
-                return  # Not the doctor for this session
+            bot_id = (await context.bot.get_me()).id
+            if update.effective_user.id == bot_id:
+                return  # Ignore our own relayed patient messages
+            # Any other message in the room is from the doctor (or anonymous admin)
+            # Don't check doctor.telegram_id — admins send as GroupAnonymousBot
 
         msg = RelayMessage(
             session_id=active_session.id,
