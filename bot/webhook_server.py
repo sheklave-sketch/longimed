@@ -347,26 +347,11 @@ async def admin_dashboard(telegram_id: int):
     }
 
 
-@app.post("/api/admin/doctors/{doctor_id}/{action}")
-async def admin_doctor_action(doctor_id: int, action: str):
-    if action not in ("approve", "reject"):
-        raise HTTPException(status_code=400)
-    from bot.database import session_factory
-    from bot.models.doctor import Doctor, RegistrationStatus
-    async with session_factory() as session:
-        doctor = await session.get(Doctor, doctor_id)
-        if not doctor:
-            raise HTTPException(status_code=404)
-        if action == "approve":
-            doctor.is_verified = True
-            doctor.registration_status = RegistrationStatus.APPROVED
-        else:
-            doctor.registration_status = RegistrationStatus.REJECTED
-        await session.commit()
-    return {"status": "ok", "action": action}
-
-
 # ── Profile editing ─────────────────────────────────────────────────────────
+# NOTE: These specific routes MUST be registered before the
+# `/api/admin/doctors/{doctor_id}/{action}` catch-all below — FastAPI matches
+# routes in registration order, and the catch-all would otherwise swallow
+# `/profile` requests with action="profile" and reject them as 400.
 
 _PROFILE_EDITABLE_FIELDS = {
     "full_name", "bio", "sub_specialization", "languages",
@@ -490,6 +475,25 @@ async def admin_list_doctors(admin_telegram_id: int):
         }
         for d in rows
     ]
+
+
+@app.post("/api/admin/doctors/{doctor_id}/{action}")
+async def admin_doctor_action(doctor_id: int, action: str):
+    if action not in ("approve", "reject"):
+        raise HTTPException(status_code=400)
+    from bot.database import session_factory
+    from bot.models.doctor import Doctor, RegistrationStatus
+    async with session_factory() as session:
+        doctor = await session.get(Doctor, doctor_id)
+        if not doctor:
+            raise HTTPException(status_code=404)
+        if action == "approve":
+            doctor.is_verified = True
+            doctor.registration_status = RegistrationStatus.APPROVED
+        else:
+            doctor.registration_status = RegistrationStatus.REJECTED
+        await session.commit()
+    return {"status": "ok", "action": action}
 
 
 # ── POST /api/questions — Submit a public question ───────────────────────
