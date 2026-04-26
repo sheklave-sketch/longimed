@@ -108,7 +108,7 @@ export default function MySessions() {
 
                 {session.doctor_name && (
                   <p className="text-[14px] font-semibold text-ink-rich mb-1">
-                    Dr. {session.doctor_name}
+                    Dr. {session.doctor_name.replace(/^\s*(dr\.?\s+)+/i, "")}
                   </p>
                 )}
 

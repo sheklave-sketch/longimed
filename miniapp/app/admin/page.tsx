@@ -435,7 +435,7 @@ export default function AdminPanel() {
                       {doc.full_name.split(" ").map((n) => n[0]).join("").slice(0, 2)}
                     </div>
                     <div>
-                      <p className="font-display font-semibold text-ink-rich text-[14px]">Dr. {doc.full_name}</p>
+                      <p className="font-display font-semibold text-ink-rich text-[14px]">Dr. {doc.full_name.replace(/^\s*(dr\.?\s+)+/i, "")}</p>
                       <p className="text-[11px] text-ink-secondary">{doc.specialty.replace("_", " ")} · <span className="font-mono">{doc.license_number}</span></p>
                     </div>
                   </div>

@@ -77,7 +77,7 @@ export default function DoctorProfile() {
         </div>
 
         <div className="flex items-center justify-center gap-2 mb-1">
-          <h1 className="font-display font-bold text-[20px] text-ink-rich">Dr. {doctor.full_name}</h1>
+          <h1 className="font-display font-bold text-[20px] text-ink-rich">Dr. {doctor.full_name.replace(/^\s*(dr\.?\s+)+/i, "")}</h1>
           <span className="w-5 h-5 rounded-full bg-brand-teal flex items-center justify-center badge-verified">
             <svg width="11" height="11" viewBox="0 0 11 11" fill="none"><path d="M3 5.5L4.8 7.5L8 3.5" stroke="white" strokeWidth="1.4" strokeLinecap="round" strokeLinejoin="round"/></svg>
           </span>

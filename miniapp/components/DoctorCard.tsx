@@ -52,7 +52,7 @@ export default function DoctorCard({ doctor, index = 0 }: { doctor: Doctor; inde
             <div className="flex-1 min-w-0">
               <div className="flex items-center gap-1.5 mb-0.5">
                 <h3 className="font-display font-semibold text-ink-rich text-[15px] truncate group-hover:text-brand-teal transition-colors">
-                  Dr. {doctor.full_name}
+                  Dr. {doctor.full_name.replace(/^\s*(dr\.?\s+)+/i, "")}
                 </h3>
                 <span className="shrink-0 w-[18px] h-[18px] rounded-full bg-brand-teal flex items-center justify-center badge-verified">
                   <svg width="10" height="10" viewBox="0 0 10 10" fill="none"><path d="M2.5 5L4.5 7L7.5 3" stroke="white" strokeWidth="1.4" strokeLinecap="round" strokeLinejoin="round"/></svg>

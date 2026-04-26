@@ -284,7 +284,7 @@ function BookConsultation() {
                       </div>
                       <div className="flex-1 min-w-0">
                         <p className={`text-[14px] font-semibold truncate ${selectedDoctor === doc.id ? "text-brand-teal-deep" : "text-ink-rich"}`}>
-                          Dr. {doc.full_name}
+                          Dr. {doc.full_name.replace(/^\s*(dr\.?\s+)+/i, "")}
                         </p>
                         <div className="flex items-center gap-2 mt-0.5">
                           <span className="text-[12px] text-ink-secondary">
@@ -398,7 +398,7 @@ function BookConsultation() {
               {selectedDoctorObj && (
                 <div className="flex justify-between">
                   <span className="text-[12px] text-ink-muted">{t("book_label_doctor")}</span>
-                  <span className="text-[13px] font-semibold text-ink-rich">Dr. {selectedDoctorObj.full_name}</span>
+                  <span className="text-[13px] font-semibold text-ink-rich">Dr. {selectedDoctorObj.full_name.replace(/^\s*(dr\.?\s+)+/i, "")}</span>
                 </div>
               )}
               <div className="flex justify-between">

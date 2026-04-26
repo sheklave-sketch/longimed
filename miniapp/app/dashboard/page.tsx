@@ -56,7 +56,7 @@ export default function DoctorDashboard() {
       {/* Welcome */}
       <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="mb-5">
         <p className="text-[12px] font-semibold text-ink-muted uppercase tracking-[0.1em] mb-1">Dashboard</p>
-        <h1 className="font-display font-bold text-[24px] text-ink-rich tracking-tight">Dr. {doctor.full_name}</h1>
+        <h1 className="font-display font-bold text-[24px] text-ink-rich tracking-tight">Dr. {doctor.full_name.replace(/^\s*(dr\.?\s+)+/i, "")}</h1>
         <p className="text-ink-secondary text-[13px] mt-0.5">{specLabel} Specialist</p>
       </motion.div>
 
