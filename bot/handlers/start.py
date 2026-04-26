@@ -34,6 +34,8 @@ from bot.utils.keyboards import (
 logger = logging.getLogger(__name__)
 
 # States
+# PATIENT_PHONE and CONFIRM_PHONE retained for state-id compatibility but no
+# longer reached: phone is no longer collected during onboarding.
 LANGUAGE, CONSENT, ROLE, PATIENT_PHONE, CONFIRM_PHONE, DONE = range(6)
 # Doctor registration states
 DOC_NAME, DOC_LICENSE, DOC_SPECIALTY, DOC_LANGUAGES, DOC_BIO, DOC_PHOTO, DOC_CONFIRM = range(50, 57)
@@ -66,14 +68,16 @@ async def cmd_start(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
         )
         doctor = doc_result.scalar_one_or_none()
 
-    # Returning user with phone → straight to menu
-    if user and user.consent_given and user.phone:
+    # Returning consented user → straight to menu (preload language).
+    # Phone is no longer required at onboarding; it can be added later
+    # at the point of use (e.g. callbacks, paid sessions).
+    if user and user.consent_given:
         lang = user.language
         context.user_data["lang"] = lang
 
         if doctor:
             await update.message.reply_text(
-                f"Welcome back, Dr. {doctor.full_name}! 👨‍⚕️",
+                f"Welcome back, Dr. {doctor.full_name.replace('Dr. ', '').replace('Dr.', '').strip()}! 👨‍⚕️",
                 reply_markup=doctor_menu_keyboard(lang),
             )
         else:
@@ -82,16 +86,6 @@ async def cmd_start(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
                 reply_markup=main_menu_keyboard(lang),
             )
         return ConversationHandler.END
-
-    # Returning user with consent but no phone → skip to role/phone
-    if user and user.consent_given and not user.phone:
-        lang = user.language
-        context.user_data["lang"] = lang
-        await update.message.reply_text(
-            t("role_question", lang),
-            reply_markup=role_keyboard(lang),
-        )
-        return ROLE
 
     # New user → full onboarding
     await update.message.reply_text(
@@ -196,18 +190,21 @@ async def handle_role(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int
         )
         return DOC_NAME
 
-    # Patient — ask for phone
-    from telegram import KeyboardButton, ReplyKeyboardMarkup
+    # Patient — straight to main menu (no phone collection at onboarding).
+    # Phone, if needed for callbacks or paid sessions, is collected later.
     await query.edit_message_text(t("patient_welcome", lang))
     await update.effective_message.reply_text(
-        f"{t('phone_request', lang)}\n\nStep 1 of 1",
-        reply_markup=ReplyKeyboardMarkup(
-            [[KeyboardButton(t("btn_share_phone", lang), request_contact=True)]],
-            one_time_keyboard=True,
-            resize_keyboard=True,
-        ),
+        t("patient_ready", lang),
+        reply_markup=main_menu_keyboard(lang),
     )
-    return PATIENT_PHONE
+
+    # Execute any pending deep link
+    pending = context.user_data.pop("pending_deep_link", None)
+    if pending:
+        from bot.handlers.deep_link import _execute_deep_link
+        await _execute_deep_link(update, context, pending)
+
+    return ConversationHandler.END
 
 
 # ── Doctor Registration Steps ─────────────────────────────────────────────
@@ -637,8 +634,6 @@ start_conv_handler = ConversationHandler(
         LANGUAGE: [CallbackQueryHandler(select_language, pattern=r"^lang:")],
         CONSENT: [CallbackQueryHandler(handle_consent, pattern=r"^consent:")],
         ROLE: [CallbackQueryHandler(handle_role, pattern=r"^role:")],
-        PATIENT_PHONE: [MessageHandler(filters.CONTACT, handle_phone)],
-        CONFIRM_PHONE: [CallbackQueryHandler(confirm_phone, pattern=r"^phone:(confirm|reenter)$")],
         # Doctor registration
         DOC_NAME: [MessageHandler(filters.TEXT & ~filters.COMMAND, doc_receive_name)],
         DOC_LICENSE: [MessageHandler(filters.TEXT & ~filters.COMMAND, doc_receive_license)],
