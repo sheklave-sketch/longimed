@@ -3,8 +3,19 @@
 import { useState, useEffect } from "react";
 import { motion } from "framer-motion";
 import StatCard from "@/components/StatCard";
+import DoctorProfileEditor, { DoctorProfile } from "@/components/DoctorProfileEditor";
 import { initTelegram, getTelegramUser } from "@/lib/telegram";
 import { adminRegisterDoctor } from "@/lib/api";
+
+interface ManagedDoctor extends DoctorProfile {
+  telegram_id: number | null;
+  license_number: string;
+  is_verified: boolean;
+  is_available: boolean;
+  registration_status: string;
+  rating_avg: number;
+  rating_count: number;
+}
 
 // Uses Next.js rewrites (next.config.js) to proxy /api/* to VPS
 const API_BASE = "";
@@ -63,6 +74,19 @@ export default function AdminPanel() {
   const [signupLink, setSignupLink] = useState("");
   const [addError, setAddError] = useState("");
 
+  // Manage doctors state
+  const [allDoctors, setAllDoctors] = useState<ManagedDoctor[]>([]);
+  const [doctorSearch, setDoctorSearch] = useState("");
+  const [editingDoctorId, setEditingDoctorId] = useState<number | null>(null);
+
+  const refreshAllDoctors = async (tg: number) => {
+    if (!tg) return;
+    try {
+      const r = await fetch(`/api/admin/doctors?admin_telegram_id=${tg}`);
+      if (r.ok) setAllDoctors(await r.json());
+    } catch {}
+  };
+
   useEffect(() => {
     initTelegram();
 
@@ -86,6 +110,8 @@ export default function AdminPanel() {
     fetch(`${API_BASE}/api/admin/dashboard/${tgId}`)
       .then((r) => { if (!r.ok) throw new Error(); return r.json(); })
       .then(setData).catch(() => setData(null)).finally(() => setLoading(false));
+
+    refreshAllDoctors(tgId);
   }, []);
 
   const handleAction = async (id: number, action: "approve" | "reject") => {
@@ -428,6 +454,81 @@ export default function AdminPanel() {
           </div>
         ) : (
           <div className="card p-8 text-center"><p className="text-ink-muted text-[13px]">No pending applications</p></div>
+        )}
+      </motion.div>
+
+      {/* Manage existing doctors */}
+      <motion.div initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.27 }} className="mb-6">
+        <div className="flex items-center justify-between mb-3 gap-2">
+          <h2 className="font-display font-semibold text-ink-rich text-[14px]">Manage Doctors ({allDoctors.length})</h2>
+          <input
+            type="text"
+            value={doctorSearch}
+            onChange={(e) => setDoctorSearch(e.target.value)}
+            placeholder="Search…"
+            className="px-3 py-1.5 rounded-lg bg-surface-white border border-surface-border text-[12px] text-ink-rich w-32 focus-ring"
+          />
+        </div>
+        {allDoctors.length === 0 ? (
+          <div className="card p-6 text-center"><p className="text-ink-muted text-[12px]">No doctors yet</p></div>
+        ) : (
+          <div className="space-y-2">
+            {allDoctors
+              .filter((d) => {
+                const q = doctorSearch.trim().toLowerCase();
+                if (!q) return true;
+                return d.full_name.toLowerCase().includes(q) || d.license_number.toLowerCase().includes(q);
+              })
+              .map((doc) => {
+                const initials = doc.full_name.split(/\s+/).map((n) => n[0]).join("").slice(0, 2).toUpperCase();
+                const isEditing = editingDoctorId === doc.id;
+                return (
+                  <div key={doc.id} className="card overflow-hidden">
+                    <div className="p-4 flex items-center gap-3">
+                      {doc.profile_photo_url ? (
+                        <img src={doc.profile_photo_url} alt={doc.full_name} className="w-11 h-11 rounded-xl object-cover shrink-0 border border-surface-border" />
+                      ) : (
+                        <div className="w-11 h-11 rounded-xl bg-brand-teal-light flex items-center justify-center font-display font-bold text-brand-teal-deep text-[13px] shrink-0">
+                          {initials}
+                        </div>
+                      )}
+                      <div className="flex-1 min-w-0">
+                        <div className="flex items-center gap-2">
+                          <p className="font-display font-semibold text-ink-rich text-[13px] truncate">Dr. {doc.full_name.replace(/^\s*(dr\.?\s+)+/i, "")}</p>
+                          {!doc.is_verified && (
+                            <span className="text-[9px] font-bold uppercase px-1.5 py-0.5 rounded bg-amber-50 text-amber-700">Pending</span>
+                          )}
+                        </div>
+                        <p className="text-[11px] text-ink-muted truncate">
+                          {doc.specialty.replace(/_/g, " ")}
+                          {" · "}{doc.bio ? `${doc.bio.length} ch bio` : "no bio"}
+                          {!doc.profile_photo_url && " · no photo"}
+                        </p>
+                      </div>
+                      <button
+                        onClick={() => setEditingDoctorId(isEditing ? null : doc.id)}
+                        className="shrink-0 px-3 py-1.5 rounded-lg bg-surface-muted text-ink-rich text-[11px] font-bold hover:bg-surface-border transition-colors"
+                      >
+                        {isEditing ? "Close" : "Edit"}
+                      </button>
+                    </div>
+                    {isEditing && (
+                      <div className="px-4 pb-5 border-t border-surface-border pt-4 bg-surface-warm/40">
+                        <DoctorProfileEditor
+                          adminMode
+                          initial={doc}
+                          endpoint={`/api/admin/doctors/${doc.id}/profile`}
+                          extraBody={{ admin_telegram_id: adminTgId }}
+                          onSaved={(updated) => {
+                            setAllDoctors((prev) => prev.map((d) => d.id === doc.id ? { ...d, ...updated } : d));
+                          }}
+                        />
+                      </div>
+                    )}
+                  </div>
+                );
+              })}
+          </div>
         )}
       </motion.div>
 

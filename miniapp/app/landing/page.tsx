@@ -30,7 +30,7 @@ function Reveal({
   );
 }
 
-const BOT_LINK = "https://t.me/LongiMedBot";
+const BOT_LINK = "https://t.me/longimed_bot";
 const CALL = "+251 944 140 404";
 
 const LANG_LABELS: Record<string, string> = { en: "English", am: "Amharic", or: "Oromifa", ti: "Tigrinya" };
@@ -48,19 +48,32 @@ export default function LandingPage() {
     fetch("/api/doctors")
       .then((r) => r.ok ? r.json() : [])
       .then((data: Doctor[]) => {
+        const cleanName = (name: string) =>
+          name.replace(/^\s*(dr\.?\s+)+/i, "").trim();
+        const dedupKey = (name: string) =>
+          cleanName(name).toLowerCase().split(/\s+/).slice(0, 2).join(" ");
+
+        const seen = new Set<string>();
         const real = data
           .filter((d) =>
             d.is_available &&
+            !!d.profile_photo_url &&
             d.full_name &&
             d.full_name.length > 5 &&
             !/^(test|yest|demo)\b/i.test(d.full_name)
           )
+          .map((d) => ({ ...d, full_name: cleanName(d.full_name) }))
           .sort((a, b) => {
             const score = (d: Doctor) =>
-              (d.profile_photo_url ? 4 : 0) +
               (d.bio && d.bio.length >= 30 ? 2 : 0) +
               (d.rating_avg > 0 ? 1 : 0);
             return score(b) - score(a);
+          })
+          .filter((d) => {
+            const key = dedupKey(d.full_name);
+            if (seen.has(key)) return false;
+            seen.add(key);
+            return true;
           });
         setDoctors(real.slice(0, 4));
       })
@@ -321,7 +334,7 @@ export default function LandingPage() {
           <div className="max-w-7xl mx-auto px-6 sm:px-10 flex flex-wrap items-center justify-center gap-x-10 gap-y-3 text-[13px] sm:text-[14px] font-medium" style={{ color: 'var(--warm-gray)' }}>
             {[
               { icon: <svg width="18" height="18" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="1.5"><path strokeLinecap="round" strokeLinejoin="round" d="M9 12.75L11.25 15 15 9.75m-3-7.036A11.959 11.959 0 013.598 6 11.99 11.99 0 003 9.749c0 5.592 3.824 10.29 9 11.623 5.176-1.332 9-6.03 9-11.622 0-1.31-.21-2.571-.598-3.751h-.152c-3.196 0-6.1-1.248-8.25-3.285z" /></svg>, text: "Licensed Physicians" },
-              { icon: <svg width="18" height="18" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="1.5"><path strokeLinecap="round" strokeLinejoin="round" d="M10.5 21l5.25-11.25L21 21m-9-3h7.5M3 5.621a48.474 48.474 0 016-.371m0 0c1.12 0 2.233.038 3.334.114M9 5.25V3m3.334 2.364V3" /></svg>, text: "Amharic & English" },
+              { icon: <svg width="18" height="18" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="1.5"><path strokeLinecap="round" strokeLinejoin="round" d="M10.5 21l5.25-11.25L21 21m-9-3h7.5M3 5.621a48.474 48.474 0 016-.371m0 0c1.12 0 2.233.038 3.334.114M9 5.25V3m3.334 2.364V3" /></svg>, text: "Amharic · English · Tigrigna · Oromifa" },
               { icon: <svg width="18" height="18" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="1.5"><path strokeLinecap="round" strokeLinejoin="round" d="M12 6v6h4.5m4.5 0a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>, text: "24 / 7 Available" },
               { icon: <svg width="18" height="18" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="1.5"><path strokeLinecap="round" strokeLinejoin="round" d="M15.75 5.25a3 3 0 013 3m3 0a6 6 0 01-7.029 5.912c-.563-.097-1.159.026-1.563.43L10.5 17.25H8.25v2.25H6v2.25H2.25v-2.818c0-.597.237-1.17.659-1.591l6.499-6.499c.404-.404.527-1 .43-1.563A6 6 0 1121.75 8.25z" /></svg>, text: "Anonymous Option" },
             ].map((item) => (
@@ -484,57 +497,57 @@ export default function LandingPage() {
                 return (
                   <Reveal key={doc.id} delay={i * 0.1}>
                     <div
-                      className="doctor-card rounded-[20px] p-6 relative overflow-hidden"
+                      className="doctor-card rounded-[20px] relative overflow-hidden flex flex-col h-full"
                       style={{
                         background: '#FFFFFF',
                         border: '1px solid var(--warm-border)',
                         boxShadow: '0 4px 24px var(--warm-shadow)',
                       }}
                     >
-                      {/* Availability badge */}
-                      {doc.is_available && (
-                        <div className="absolute top-4 right-4 flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[10px] font-semibold" style={{ background: '#ECFDF5', color: '#059669' }}>
-                          <span className="w-1.5 h-1.5 rounded-full bg-green-500" />
-                          Online
-                        </div>
-                      )}
-
-                      {/* Photo or initials */}
-                      <div className="mb-5">
+                      {/* Big portrait — hero of the card */}
+                      <div className="relative w-full" style={{ aspectRatio: '4 / 5', background: i % 2 === 0 ? 'var(--teal-soft)' : 'var(--terra-light)' }}>
                         {doc.profile_photo_url ? (
-                          <div className="w-[72px] h-[72px] rounded-full overflow-hidden" style={{ border: '3px solid var(--cream-deep)' }}>
-                            <img
-                              src={doc.profile_photo_url}
-                              alt={doc.full_name}
-                              className="w-full h-full object-cover"
-                            />
-                          </div>
+                          <img
+                            src={doc.profile_photo_url}
+                            alt={doc.full_name}
+                            className="w-full h-full object-cover"
+                          />
                         ) : (
                           <div
-                            className="w-[72px] h-[72px] rounded-full flex items-center justify-center font-editorial font-medium text-[22px]"
+                            className="w-full h-full flex items-center justify-center font-editorial font-medium"
                             style={{
-                              background: i % 2 === 0 ? 'var(--teal-soft)' : 'var(--terra-light)',
+                              fontSize: 64,
                               color: i % 2 === 0 ? 'var(--teal)' : 'var(--terra)',
-                              border: `3px solid ${i % 2 === 0 ? 'rgba(53,200,187,0.15)' : 'rgba(212,114,92,0.15)'}`,
                             }}
                           >
                             {initials}
                           </div>
                         )}
+                        {/* Soft bottom gradient for legibility of any overlaid pill */}
+                        <div className="absolute inset-x-0 bottom-0 h-20" style={{ background: 'linear-gradient(to top, rgba(26,37,64,0.35), transparent)' }} />
+
+                        {/* Availability badge */}
+                        {doc.is_available && (
+                          <div className="absolute top-4 left-4 flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[10px] font-semibold backdrop-blur" style={{ background: 'rgba(255,255,255,0.92)', color: '#059669' }}>
+                            <span className="w-1.5 h-1.5 rounded-full bg-green-500" />
+                            Online
+                          </div>
+                        )}
                       </div>
 
-                      {/* Info */}
-                      <h3 className="font-editorial font-medium text-[17px] mb-1" style={{ color: 'var(--navy)' }}>
-                        Dr. {doc.full_name}
-                      </h3>
-                      <p className="text-[13px] font-medium mb-2" style={{ color: 'var(--teal)' }}>
-                        {specLabel}
-                      </p>
-                      {doc.bio && (
-                        <p className="text-[13px] leading-[1.6] mb-4" style={{ color: 'var(--warm-gray)' }}>
-                          {doc.bio.length > 80 ? doc.bio.slice(0, 80) + "..." : doc.bio}
+                      {/* Info block */}
+                      <div className="p-5 sm:p-6 flex flex-col flex-1">
+                        <h3 className="font-editorial font-medium text-[19px] mb-1 leading-[1.2]" style={{ color: 'var(--navy)' }}>
+                          Dr. {doc.full_name}
+                        </h3>
+                        <p className="text-[13px] font-medium mb-3" style={{ color: 'var(--teal)' }}>
+                          {specLabel}
                         </p>
-                      )}
+                        {doc.bio && (
+                          <p className="text-[13px] leading-[1.6] mb-4 flex-1" style={{ color: 'var(--warm-gray)' }}>
+                            {doc.bio.length > 110 ? doc.bio.slice(0, 110).trim() + "…" : doc.bio}
+                          </p>
+                        )}
 
                       {/* Languages + rating */}
                       <div className="flex flex-wrap gap-1.5">
@@ -556,6 +569,7 @@ export default function LandingPage() {
                             {doc.rating_avg}
                           </span>
                         )}
+                        </div>
                       </div>
                     </div>
                   </Reveal>

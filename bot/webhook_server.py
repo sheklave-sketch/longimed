@@ -265,8 +265,15 @@ async def doctor_dashboard(telegram_id: int):
 
     return {
         "doctor": {
+            "id": doctor.id,
             "full_name": doctor.full_name,
             "specialty": doctor.specialty.value if hasattr(doctor.specialty, "value") else doctor.specialty,
+            "specialties": doctor.specialties or [],
+            "languages": doctor.languages or [],
+            "bio": doctor.bio or "",
+            "sex": doctor.sex.value if doctor.sex and hasattr(doctor.sex, "value") else None,
+            "sub_specialization": doctor.sub_specialization or "",
+            "profile_photo_url": doctor.profile_photo_file_id,
             "is_available": doctor.is_available,
             "rating_avg": round(doctor.rating_avg, 2),
             "rating_count": doctor.rating_count,
@@ -357,6 +364,132 @@ async def admin_doctor_action(doctor_id: int, action: str):
             doctor.registration_status = RegistrationStatus.REJECTED
         await session.commit()
     return {"status": "ok", "action": action}
+
+
+# ── Profile editing ─────────────────────────────────────────────────────────
+
+_PROFILE_EDITABLE_FIELDS = {
+    "full_name", "bio", "sub_specialization", "languages",
+    "specialty", "specialties", "sex", "profile_photo_url",
+}
+_ADMIN_ONLY_FIELDS = {
+    "license_number", "is_verified", "is_available", "telegram_id",
+    "max_concurrent_patients",
+}
+
+
+def _apply_doctor_updates(doctor, body, allowed):
+    from bot.models.doctor import Specialty, Sex
+    changed = []
+    for field, value in body.items():
+        if field not in allowed:
+            continue
+        if field == "profile_photo_url":
+            doctor.profile_photo_file_id = value or None
+            changed.append(field)
+        elif field == "specialty" and value:
+            try:
+                doctor.specialty = Specialty(value)
+                changed.append(field)
+            except ValueError:
+                continue
+        elif field == "sex":
+            doctor.sex = Sex(value) if value else None
+            changed.append(field)
+        elif field == "specialties":
+            doctor.specialties = list(value or [])
+            changed.append(field)
+        elif field == "languages":
+            if value:
+                doctor.languages = list(value)
+                changed.append(field)
+        elif field in {"bio", "full_name", "sub_specialization", "license_number"}:
+            setattr(doctor, field, (value or "").strip() or (None if field != "full_name" else doctor.full_name))
+            changed.append(field)
+        elif field == "telegram_id":
+            doctor.telegram_id = int(value) if value else None
+            changed.append(field)
+        elif field in {"is_verified", "is_available"}:
+            setattr(doctor, field, bool(value))
+            changed.append(field)
+        elif field == "max_concurrent_patients" and value:
+            doctor.max_concurrent_patients = int(value)
+            changed.append(field)
+    return changed
+
+
+@app.post("/api/doctors/{telegram_id}/profile")
+async def update_own_profile(telegram_id: int, request: Request):
+    """Doctor self-edit. The telegram_id in the path must match a verified doctor."""
+    from bot.database import session_factory
+    from bot.models.doctor import Doctor
+    from sqlalchemy import select
+    body = await request.json()
+    async with session_factory() as session:
+        result = await session.execute(
+            select(Doctor).where(Doctor.telegram_id == telegram_id, Doctor.is_verified.is_(True))
+        )
+        doctor = result.scalar_one_or_none()
+        if not doctor:
+            raise HTTPException(status_code=404, detail="Verified doctor not found")
+        changed = _apply_doctor_updates(doctor, body, _PROFILE_EDITABLE_FIELDS)
+        await session.commit()
+    return {"status": "ok", "changed": changed}
+
+
+@app.post("/api/admin/doctors/{doctor_id}/profile")
+async def admin_update_profile(doctor_id: int, request: Request):
+    """Admin edit any doctor. Requires admin_telegram_id in body matching settings.admin_ids."""
+    from bot.database import session_factory
+    from bot.models.doctor import Doctor
+    body = await request.json()
+    admin_tg = body.pop("admin_telegram_id", None)
+    if not admin_tg or int(admin_tg) not in settings.admin_ids:
+        raise HTTPException(status_code=403, detail="Admin only")
+    async with session_factory() as session:
+        doctor = await session.get(Doctor, doctor_id)
+        if not doctor:
+            raise HTTPException(status_code=404)
+        changed = _apply_doctor_updates(
+            doctor, body, _PROFILE_EDITABLE_FIELDS | _ADMIN_ONLY_FIELDS
+        )
+        await session.commit()
+    return {"status": "ok", "changed": changed}
+
+
+@app.get("/api/admin/doctors")
+async def admin_list_doctors(admin_telegram_id: int):
+    """Full doctor list for admin management UI."""
+    if admin_telegram_id not in settings.admin_ids:
+        raise HTTPException(status_code=403)
+    from bot.database import session_factory
+    from bot.models.doctor import Doctor
+    from sqlalchemy import select
+    async with session_factory() as session:
+        rows = (await session.execute(
+            select(Doctor).order_by(Doctor.is_verified.desc(), Doctor.full_name.asc())
+        )).scalars().all()
+    return [
+        {
+            "id": d.id,
+            "telegram_id": d.telegram_id,
+            "full_name": d.full_name,
+            "license_number": d.license_number,
+            "specialty": d.specialty.value if hasattr(d.specialty, "value") else d.specialty,
+            "specialties": d.specialties or [],
+            "languages": d.languages or [],
+            "bio": d.bio or "",
+            "sex": d.sex.value if d.sex and hasattr(d.sex, "value") else None,
+            "sub_specialization": d.sub_specialization or "",
+            "profile_photo_url": d.profile_photo_file_id,
+            "is_verified": d.is_verified,
+            "is_available": d.is_available,
+            "registration_status": d.registration_status.value if hasattr(d.registration_status, "value") else d.registration_status,
+            "rating_avg": float(d.rating_avg or 0),
+            "rating_count": d.rating_count or 0,
+        }
+        for d in rows
+    ]
 
 
 # ── POST /api/questions — Submit a public question ───────────────────────

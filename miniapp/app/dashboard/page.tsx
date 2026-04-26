@@ -4,10 +4,11 @@ import { useState, useEffect } from "react";
 import { motion } from "framer-motion";
 import StatCard from "@/components/StatCard";
 import EmptyState from "@/components/EmptyState";
+import DoctorProfileEditor, { DoctorProfile } from "@/components/DoctorProfileEditor";
 import { initTelegram, getTelegramUser } from "@/lib/telegram";
 
 interface DashboardData {
-  doctor: { full_name: string; specialty: string; is_available: boolean; rating_avg: number; rating_count: number } | null;
+  doctor: (DoctorProfile & { is_available: boolean; rating_avg: number; rating_count: number }) | null;
   stats: { total_sessions: number; active_sessions: number; pending_queue: number; pending_earnings: number; paid_earnings: number };
   recent_sessions: Array<{ id: number; status: string; issue_description: string; created_at: string }>;
 }
@@ -111,6 +112,29 @@ export default function DoctorDashboard() {
             <p className="font-display font-bold text-[20px] text-emerald-600 tracking-tight">{stats.paid_earnings.toLocaleString()} <span className="text-[12px] font-medium text-ink-muted">ETB</span></p>
           </div>
         </div>
+      </motion.div>
+
+      {/* Profile editor */}
+      <motion.div initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.32 }} className="mb-5">
+        <details className="card overflow-hidden group">
+          <summary className="p-5 flex items-center justify-between cursor-pointer list-none">
+            <div className="flex items-center gap-3">
+              <div className="w-9 h-9 rounded-xl bg-brand-teal-light flex items-center justify-center text-[16px]">✏️</div>
+              <div>
+                <h2 className="font-display font-semibold text-ink-rich text-[14px]">Your profile</h2>
+                <p className="text-[11px] text-ink-muted mt-0.5">Bio, photo, languages — what patients see</p>
+              </div>
+            </div>
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="text-ink-muted transition-transform group-open:rotate-180"><path strokeLinecap="round" strokeLinejoin="round" d="M19.5 8.25l-7.5 7.5-7.5-7.5" /></svg>
+          </summary>
+          <div className="px-5 pb-5 pt-2 border-t border-surface-border">
+            <DoctorProfileEditor
+              initial={doctor}
+              endpoint={`/api/doctors/${getTelegramUser()?.id || 0}/profile`}
+              onSaved={(updated) => setData((p) => p && p.doctor ? { ...p, doctor: { ...p.doctor, ...updated } } : p)}
+            />
+          </div>
+        </details>
       </motion.div>
 
       {/* Recent sessions */}
