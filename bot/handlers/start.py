@@ -4,6 +4,7 @@ import logging
 from datetime import datetime, timezone
 
 from telegram import Update
+from telegram.error import BadRequest
 from telegram.ext import (
     CallbackQueryHandler,
     CommandHandler,
@@ -12,6 +13,14 @@ from telegram.ext import (
     MessageHandler,
     filters,
 )
+
+
+async def _safe_edit(query, *args, **kwargs) -> None:
+    try:
+        await query.edit_message_text(*args, **kwargs)
+    except BadRequest as exc:
+        if "not modified" not in str(exc).lower():
+            raise
 
 from bot.i18n import t
 from bot.utils.keyboards import (
@@ -100,7 +109,8 @@ async def select_language(update: Update, context: ContextTypes.DEFAULT_TYPE) ->
     lang = query.data.split(":")[1]  # "lang:en" or "lang:am"
     context.user_data["lang"] = lang
 
-    await query.edit_message_text(
+    await _safe_edit(
+        query,
         f"{t('disclaimer_title', lang)}\n\n{t('disclaimer_body', lang)}",
         reply_markup=consent_keyboard(lang),
     )
@@ -113,7 +123,7 @@ async def handle_consent(update: Update, context: ContextTypes.DEFAULT_TYPE) -> 
     lang = context.user_data.get("lang", "en")
 
     if query.data == "consent:disagree":
-        await query.edit_message_text(t("disagree_farewell", lang))
+        await _safe_edit(query, t("disagree_farewell", lang))
         return ConversationHandler.END
 
     # Record consent
@@ -142,7 +152,8 @@ async def handle_consent(update: Update, context: ContextTypes.DEFAULT_TYPE) -> 
 
         await session.commit()
 
-    await query.edit_message_text(
+    await _safe_edit(
+        query,
         t("role_question", lang),
         reply_markup=role_keyboard(lang),
     )

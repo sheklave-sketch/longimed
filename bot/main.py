@@ -65,7 +65,7 @@ def register_handlers(app: Application) -> None:
 
     # Language change (from Settings or onboarding fallback)
     from bot.handlers.menu_callbacks import handle_language_change
-    app.add_handler(CallbackQueryHandler(handle_language_change, pattern=r"^lang:"), group=0)
+    app.add_handler(CallbackQueryHandler(handle_language_change, pattern=r"^setlang:"), group=0)
 
     # Doctor schedule toggle
     from bot.handlers.menu_callbacks import handle_schedule_toggle, handle_book_doctor
@@ -175,6 +175,11 @@ def register_handlers(app: Application) -> None:
 
 async def error_handler(update: object, context: ContextTypes.DEFAULT_TYPE) -> None:
     """Log all unhandled errors so we can see them in docker logs."""
+    err_text = str(context.error) if context.error else ""
+    benign = "not modified" in err_text.lower()
+    if benign:
+        logger.info("Ignored benign Telegram error: %s", err_text)
+        return
     logger.error("Unhandled exception: %s", context.error, exc_info=context.error)
     if hasattr(update, "effective_message") and update.effective_message:
         try:
