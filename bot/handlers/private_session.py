@@ -576,7 +576,9 @@ async def _start_doctor_timer(context, session_id: int) -> None:
     )
 
 _MAX_REASSIGN_ATTEMPTS = 3
-_ADMIN_ESCALATION_INTERVAL = 300  # 5 minutes
+_ADMIN_ESCALATION_INTERVAL = 300  # 5 minutes between admin reminders
+_MAX_ADMIN_REMINDERS = 3            # then auto-cancel the session
+_SESSION_HARD_EXPIRY_HOURS = 6      # safety: never remind on sessions older than this
 
 async def _check_doctor_response(context: ContextTypes.DEFAULT_TYPE) -> None:
     session_id = context.job.data["session_id"]
@@ -690,42 +692,101 @@ async def _escalate_long_wait(context, session_id: int, patient) -> None:
         except Exception:
             pass
 
-    # Schedule a follow-up admin reminder if still unresolved after 5 more minutes
+    # Schedule the first follow-up reminder (capped — see _admin_followup_reminder).
     context.job_queue.run_once(
         _admin_followup_reminder,
         when=_ADMIN_ESCALATION_INTERVAL,
-        data={"session_id": session_id},
+        data={"session_id": session_id, "attempt": 1},
         name=f"admin_reminder_{session_id}",
     )
 
 
 async def _admin_followup_reminder(context: ContextTypes.DEFAULT_TYPE) -> None:
-    """Remind admins if session is still stuck in AWAITING_DOCTOR."""
+    """
+    Remind admins if a session is still stuck in AWAITING_DOCTOR.
+
+    Three guards prevent runaway loops:
+    1. Status guard — if session has moved on, return (existing).
+    2. Hard age guard — sessions older than _SESSION_HARD_EXPIRY_HOURS are
+       force-expired and the loop terminates with one final notification.
+    3. Attempt cap — after _MAX_ADMIN_REMINDERS reminders, auto-cancel the
+       session and notify admins once that it's been closed.
+    """
+    from datetime import datetime, timedelta, timezone
+
     session_id = context.job.data["session_id"]
+    attempt = context.job.data.get("attempt", 1)
 
     from bot.database import session_factory
     from bot.models.session import Session, SessionStatus
-
-    async with session_factory() as session:
-        s = await session.get(Session, session_id)
-        if not s or s.status != SessionStatus.AWAITING_DOCTOR:
-            return  # Session resolved, stop reminding
-
     from bot.config import settings
+
+    async with session_factory() as db:
+        s = await db.get(Session, session_id)
+        if not s or s.status != SessionStatus.AWAITING_DOCTOR:
+            # Session moved on (resolved/cancelled/active). Stop.
+            return
+
+        # Hard age guard — don't keep nagging on stale sessions.
+        if s.created_at:
+            age = datetime.now(timezone.utc) - s.created_at
+            if age > timedelta(hours=_SESSION_HARD_EXPIRY_HOURS):
+                s.status = SessionStatus.EXPIRED
+                s.ended_at = datetime.now(timezone.utc)
+                await db.commit()
+                for admin_id in settings.admin_ids:
+                    try:
+                        await context.bot.send_message(
+                            chat_id=admin_id,
+                            text=(
+                                f"Session #{session_id} auto-expired "
+                                f"({_SESSION_HARD_EXPIRY_HOURS}h+ waiting, no doctor). "
+                                f"No further reminders."
+                            ),
+                        )
+                    except Exception:
+                        pass
+                logger.info("Session %s auto-expired by age guard", session_id)
+                return
+
+        # Attempt cap — auto-cancel after MAX_ADMIN_REMINDERS.
+        if attempt > _MAX_ADMIN_REMINDERS:
+            s.status = SessionStatus.CANCELLED
+            s.ended_at = datetime.now(timezone.utc)
+            await db.commit()
+            for admin_id in settings.admin_ids:
+                try:
+                    await context.bot.send_message(
+                        chat_id=admin_id,
+                        text=(
+                            f"Session #{session_id} auto-cancelled after "
+                            f"{_MAX_ADMIN_REMINDERS} reminders with no doctor response. "
+                            f"Follow up with the patient directly if needed."
+                        ),
+                    )
+                except Exception:
+                    pass
+            logger.info("Session %s auto-cancelled after %s reminders", session_id, _MAX_ADMIN_REMINDERS)
+            return
+
+    # Send this reminder.
     for admin_id in settings.admin_ids:
         try:
             await context.bot.send_message(
                 chat_id=admin_id,
-                text=f"⏰ Reminder: Session #{session_id} is STILL waiting for a doctor. Patient is waiting.",
+                text=(
+                    f"⏰ Reminder {attempt}/{_MAX_ADMIN_REMINDERS}: "
+                    f"Session #{session_id} is still waiting for a doctor."
+                ),
             )
         except Exception:
             pass
 
-    # Keep reminding every 5 minutes until resolved
+    # Schedule the next reminder with the incremented attempt counter.
     context.job_queue.run_once(
         _admin_followup_reminder,
         when=_ADMIN_ESCALATION_INTERVAL,
-        data={"session_id": session_id},
+        data={"session_id": session_id, "attempt": attempt + 1},
         name=f"admin_reminder_{session_id}",
     )
 async def _notify_admin_pending_payment(context, session_id: int, telegram_id: int, lang: str) -> None:
