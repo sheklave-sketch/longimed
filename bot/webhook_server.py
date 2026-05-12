@@ -799,7 +799,7 @@ async def book_session(request: Request):
                 try:
                     await bot.send_message(
                         chat_id=admin_id,
-                        text=f"⚠️ Session #{session_id}: Dr. {doctor.full_name} has no Telegram linked.",
+                        text=f"⚠️ Session #{session_id}: Dr. {doctor.full_name.lstrip().removeprefix('Dr.').removeprefix('Dr').lstrip()} has no Telegram linked.",
                     )
                 except Exception:
                     pass

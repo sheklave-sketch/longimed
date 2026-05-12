@@ -560,7 +560,9 @@ async def _notify_doctor_new_session(context, session_id: int, lang: str) -> Non
                 await context.bot.send_message(
                     chat_id=admin_id,
                     text=(
-                        f"⚠️ Session #{session_id}: Dr. {doctor.full_name} has no Telegram linked.\n"
+                        f"⚠️ Session #{session_id}: Dr. "
+                        f"{doctor.full_name.lstrip().removeprefix('Dr.').removeprefix('Dr').lstrip()} "
+                        f"has no Telegram linked.\n"
                         f"Send them the signup link to connect their account."
                     ),
                 )
